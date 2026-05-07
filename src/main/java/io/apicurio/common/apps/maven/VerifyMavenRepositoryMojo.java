@@ -13,6 +13,7 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -93,8 +94,56 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
     /**
      * Coordinates of an artifact found in the repository.
      */
-    record ArtifactCoordinates(String groupId, String artifactId, String version,
-            String packaging) {
+    static class ArtifactCoordinates {
+
+        private final String groupId;
+        private final String artifactId;
+        private final String version;
+        private final String packaging;
+
+        /**
+         * Creates a new instance of ArtifactCoordinates.
+         *
+         * @param groupId the Maven groupId
+         * @param artifactId the Maven artifactId
+         * @param version the Maven version
+         * @param packaging the Maven packaging type
+         */
+        ArtifactCoordinates(String groupId, String artifactId, String version,
+                String packaging) {
+            this.groupId = groupId;
+            this.artifactId = artifactId;
+            this.version = version;
+            this.packaging = packaging;
+        }
+
+        /**
+         * @return the Maven groupId
+         */
+        String groupId() {
+            return groupId;
+        }
+
+        /**
+         * @return the Maven artifactId
+         */
+        String artifactId() {
+            return artifactId;
+        }
+
+        /**
+         * @return the Maven version
+         */
+        String version() {
+            return version;
+        }
+
+        /**
+         * @return the Maven packaging type
+         */
+        String packaging() {
+            return packaging;
+        }
 
         /**
          * Returns the GAV string representation.
@@ -144,7 +193,7 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
             List<ArtifactCoordinates> matchingArtifacts = allArtifacts.stream()
                     .filter(this::matchesIncludes)
                     .filter(a -> !matchesExcludes(a))
-                    .toList();
+                    .collect(Collectors.toList());
 
             getLog().info("Found " + matchingArtifacts.size()
                     + " artifacts matching include patterns.");
@@ -323,7 +372,7 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
 
         while (maxDepth-- > 0) {
             try (var children = Files.list(current)) {
-                List<Path> items = children.toList();
+                List<Path> items = children.collect(Collectors.toList());
 
                 // Look for a directory named "maven-repository" at this level.
                 for (Path item : items) {
@@ -338,7 +387,7 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
                 // README.md alongside it), drill into it.
                 List<Path> subdirs = items.stream()
                         .filter(Files::isDirectory)
-                        .toList();
+                        .collect(Collectors.toList());
                 if (subdirs.size() == 1) {
                     logVerbose("Drilling into single subdirectory: "
                             + subdirs.get(0).getFileName());
