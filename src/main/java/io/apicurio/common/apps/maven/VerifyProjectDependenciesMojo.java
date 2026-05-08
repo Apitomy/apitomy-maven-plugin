@@ -3,7 +3,12 @@ package io.apicurio.common.apps.maven;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Component;
@@ -56,11 +61,23 @@ import org.eclipse.aether.repository.RemoteRepository;
         threadSafe = true)
 public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
 
+    private static final String PLUGIN_GROUP_ID = "io.apicurio";
+    private static final String PLUGIN_ARTIFACT_ID = "apicurio-maven-plugin";
+    private static final String GOAL_NAME = "verify-project-dependencies";
+
+    static final ConcurrentHashMap<Long, ConcurrentHashMap<String, ModuleResults>>
+            SESSION_RESULTS = new ConcurrentHashMap<>();
+    static final ConcurrentHashMap<Long, AtomicInteger>
+            SESSION_COUNTERS = new ConcurrentHashMap<>();
+
     /**
      * The current Maven project whose dependencies will be validated.
      */
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     MavenProject project;
+
+    @Parameter(defaultValue = "${session}", readonly = true, required = true)
+    MavenSession session;
 
     @SuppressWarnings("deprecation")
     @Component
@@ -112,12 +129,18 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
                         unproductizedDependencies, unproductizedGavs);
             }
 
-            // Write CSV report (before reportResults, which may throw).
+            // Write CSV report (before any failure logic).
             writeCsvReport(unproductizedGavs);
 
-            // Report results.
+            // Log per-module counts immediately.
             getLog().info("=== Project Dependency Verification Results ===");
-            reportResults(unproductizedDependencies, resolutionErrors);
+            getLog().info("  Unproductized dependencies: "
+                    + unproductizedDependencies.size());
+            getLog().info("  Resolution errors:          " + resolutionErrors.size());
+
+            // Defer failure to end of reactor build for aggregate reporting.
+            deferOrReport(projectGav, unproductizedDependencies, unproductizedGavs,
+                    resolutionErrors);
 
         } catch (MojoFailureException e) {
             throw e;
@@ -125,6 +148,134 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
             throw new MojoExecutionException(
                     "Error verifying project dependencies", e);
         }
+    }
+
+    int countExpectedExecutions() {
+        int count = 0;
+        for (MavenProject reactorProject : session.getProjects()) {
+            for (Plugin plugin : reactorProject.getBuildPlugins()) {
+                if (PLUGIN_GROUP_ID.equals(plugin.getGroupId())
+                        && PLUGIN_ARTIFACT_ID.equals(plugin.getArtifactId())) {
+                    for (PluginExecution execution : plugin.getExecutions()) {
+                        if (execution.getGoals().contains(GOAL_NAME)) {
+                            count++;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return Math.max(count, 1);
+    }
+
+    void deferOrReport(String projectGav, Set<String> unproductizedDependencies,
+            Set<String> unproductizedGavs,
+            Set<String> resolutionErrors) throws MojoFailureException {
+
+        long sessionId = session.getStartTime().getTime();
+        int expectedExecutions = countExpectedExecutions();
+
+        ConcurrentHashMap<String, ModuleResults> results =
+                SESSION_RESULTS.computeIfAbsent(sessionId,
+                        k -> new ConcurrentHashMap<>());
+        AtomicInteger counter =
+                SESSION_COUNTERS.computeIfAbsent(sessionId,
+                        k -> new AtomicInteger(0));
+
+        results.put(projectGav, new ModuleResults(projectGav,
+                unproductizedDependencies, unproductizedGavs, resolutionErrors));
+
+        boolean hasLocalFailures = !unproductizedDependencies.isEmpty()
+                || !resolutionErrors.isEmpty();
+
+        if (!hasLocalFailures) {
+            getLog().info("All dependencies are properly productized.");
+        } else {
+            getLog().warn("Unproductized dependencies found in " + projectGav
+                    + " (will report at end of reactor build).");
+        }
+
+        int completedCount = counter.incrementAndGet();
+
+        if (completedCount >= expectedExecutions) {
+            try {
+                reportAggregateResults(results);
+            } finally {
+                SESSION_RESULTS.remove(sessionId);
+                SESSION_COUNTERS.remove(sessionId);
+            }
+        }
+    }
+
+    void reportAggregateResults(ConcurrentHashMap<String, ModuleResults> allResults)
+            throws MojoFailureException {
+
+        boolean anyFailures = false;
+        int totalUnproductized = 0;
+        int totalErrors = 0;
+        int failedModules = 0;
+
+        for (ModuleResults moduleResult : allResults.values()) {
+            if (moduleResult.hasFailures()) {
+                anyFailures = true;
+                failedModules++;
+                totalUnproductized += moduleResult.unproductizedDependencies.size();
+                totalErrors += moduleResult.resolutionErrors.size();
+            }
+        }
+
+        if (!anyFailures) {
+            getLog().info("All dependencies in all reactor modules are properly "
+                    + "productized.");
+            return;
+        }
+
+        StringBuilder message = new StringBuilder();
+        message.append("\n");
+        message.append("=== Aggregate Dependency Verification Results ===\n");
+
+        for (ModuleResults moduleResult : allResults.values()) {
+            if (!moduleResult.hasFailures()) {
+                continue;
+            }
+
+            message.append("\n--- ").append(moduleResult.moduleGav)
+                    .append(" ---\n");
+
+            if (!moduleResult.unproductizedDependencies.isEmpty()) {
+                message.append("  Unproductized dependencies:\n");
+                for (String dep : moduleResult.unproductizedDependencies) {
+                    message.append("    ")
+                            .append(dep.replace("\n", "\n    "))
+                            .append("\n\n");
+                }
+            }
+            if (!moduleResult.resolutionErrors.isEmpty()) {
+                message.append("  Resolution errors:\n");
+                for (String err : moduleResult.resolutionErrors) {
+                    message.append("    ").append(err).append("\n");
+                }
+            }
+        }
+
+        message.append("\n=== Summary: ")
+                .append(failedModules).append(" module(s) with failures, ")
+                .append(totalUnproductized).append(" unproductized dep(s), ")
+                .append(totalErrors).append(" resolution error(s) ===\n");
+
+        Set<String> allGavs = new TreeSet<>();
+        for (ModuleResults moduleResult : allResults.values()) {
+            allGavs.addAll(moduleResult.unproductizedGavs);
+        }
+        if (!allGavs.isEmpty()) {
+            message.append("\n==================================================================\n");
+            for (String gav : allGavs) {
+                message.append("- ").append(gav).append("\n");
+            }
+            message.append("==================================================================\n");
+        }
+
+        throw new MojoFailureException(message.toString());
     }
 
     /**
@@ -152,6 +303,25 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
                     + ": " + e.getMessage());
             // Return the partial result so we can still validate what was resolved.
             return e.getResult();
+        }
+    }
+
+    static final class ModuleResults {
+        final String moduleGav;
+        final Set<String> unproductizedDependencies;
+        final Set<String> unproductizedGavs;
+        final Set<String> resolutionErrors;
+
+        ModuleResults(String moduleGav, Set<String> unproductizedDependencies,
+                Set<String> unproductizedGavs, Set<String> resolutionErrors) {
+            this.moduleGav = moduleGav;
+            this.unproductizedDependencies = unproductizedDependencies;
+            this.unproductizedGavs = unproductizedGavs;
+            this.resolutionErrors = resolutionErrors;
+        }
+
+        boolean hasFailures() {
+            return !unproductizedDependencies.isEmpty() || !resolutionErrors.isEmpty();
         }
     }
 
