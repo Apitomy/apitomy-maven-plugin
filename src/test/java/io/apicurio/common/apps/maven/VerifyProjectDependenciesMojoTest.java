@@ -1,11 +1,10 @@
 package io.apicurio.common.apps.maven;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -60,72 +60,73 @@ class VerifyProjectDependenciesMojoTest {
     @AfterEach
     void tearDown() {
         VerifyProjectDependenciesMojo.SESSION_RESULTS.clear();
-        VerifyProjectDependenciesMojo.SESSION_COUNTERS.clear();
     }
 
     // ========================================================================
-    // countExpectedExecutions tests
+    // isLastExecution tests
     // ========================================================================
 
     @Test
-    void testCountExpectedExecutions_singleProjectWithGoal() {
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "my-app", "verify-project-dependencies"));
-        when(mockSession.getProjects()).thenReturn(projects);
+    void testIsLastExecution_singleProjectWithGoal() {
+        MavenProject proj = createProjectWithGoal("io.apicurio", "my-app",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(proj));
+        mojo.project = proj;
 
-        assertEquals(1, mojo.countExpectedExecutions());
+        assertTrue(mojo.isLastExecution());
     }
 
     @Test
-    void testCountExpectedExecutions_multiProjectMixed() {
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "module-a", "verify-project-dependencies"),
-                createProjectWithoutPlugin("io.apicurio", "module-b"),
-                createProjectWithGoal("io.apicurio", "module-c", "verify-project-dependencies"));
-        when(mockSession.getProjects()).thenReturn(projects);
+    void testIsLastExecution_currentIsLastWithGoal() {
+        MavenProject projA = createProjectWithGoal("io.apicurio", "module-a",
+                "verify-project-dependencies");
+        MavenProject projB = createProjectWithoutPlugin("io.apicurio", "module-b");
+        MavenProject projC = createProjectWithGoal("io.apicurio", "module-c",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(projA, projB, projC));
+        mojo.project = projC;
 
-        assertEquals(2, mojo.countExpectedExecutions());
+        assertTrue(mojo.isLastExecution());
     }
 
     @Test
-    void testCountExpectedExecutions_noProjectsWithGoal() {
-        List<MavenProject> projects = List.of(
-                createProjectWithoutPlugin("io.apicurio", "module-a"));
-        when(mockSession.getProjects()).thenReturn(projects);
+    void testIsLastExecution_currentIsNotLast() {
+        MavenProject projA = createProjectWithGoal("io.apicurio", "module-a",
+                "verify-project-dependencies");
+        MavenProject projC = createProjectWithGoal("io.apicurio", "module-c",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(projA, projC));
+        mojo.project = projA;
 
-        assertEquals(1, mojo.countExpectedExecutions());
+        assertFalse(mojo.isLastExecution());
     }
 
     @Test
-    void testCountExpectedExecutions_differentGoal() {
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "module-a", "merge"));
-        when(mockSession.getProjects()).thenReturn(projects);
+    void testIsLastExecution_noProjectHasGoal() {
+        MavenProject proj = createProjectWithoutPlugin("io.apicurio", "module-a");
+        when(mockSession.getProjects()).thenReturn(List.of(proj));
+        mojo.project = proj;
 
-        assertEquals(1, mojo.countExpectedExecutions());
+        assertTrue(mojo.isLastExecution());
     }
 
     @Test
-    void testCountExpectedExecutions_differentPlugin() {
-        MavenProject project = mock(MavenProject.class);
-        Plugin plugin = new Plugin();
-        plugin.setGroupId("org.other");
-        plugin.setArtifactId("other-plugin");
-        PluginExecution exec = new PluginExecution();
-        exec.addGoal("verify-project-dependencies");
-        plugin.addExecution(exec);
-        when(project.getBuildPlugins()).thenReturn(List.of(plugin));
+    void testIsLastExecution_differentGoalOnly() {
+        MavenProject projA = createProjectWithGoal("io.apicurio", "module-a", "merge");
+        MavenProject projB = createProjectWithGoal("io.apicurio", "module-b",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(projA, projB));
+        mojo.project = projB;
 
-        when(mockSession.getProjects()).thenReturn(List.of(project));
-
-        assertEquals(1, mojo.countExpectedExecutions());
+        assertTrue(mojo.isLastExecution());
     }
 
     @Test
-    void testCountExpectedExecutions_emptyReactor() {
+    void testIsLastExecution_emptyReactor() {
         when(mockSession.getProjects()).thenReturn(List.of());
+        mojo.project = mock(MavenProject.class);
 
-        assertEquals(1, mojo.countExpectedExecutions());
+        assertTrue(mojo.isLastExecution());
     }
 
     // ========================================================================
@@ -135,10 +136,12 @@ class VerifyProjectDependenciesMojoTest {
     @Test
     void testDeferOrReport_firstModuleDoesNotThrow() {
         stubSessionStartTime();
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "module-a", "verify-project-dependencies"),
-                createProjectWithGoal("io.apicurio", "module-b", "verify-project-dependencies"));
-        when(mockSession.getProjects()).thenReturn(projects);
+        MavenProject projA = createProjectWithGoal("io.apicurio", "module-a",
+                "verify-project-dependencies");
+        MavenProject projB = createProjectWithGoal("io.apicurio", "module-b",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(projA, projB));
+        mojo.project = projA;
 
         Set<String> unproductized = Set.of("com.example:bad-lib:1.0.0");
         Set<String> gavs = Set.of("com.example:bad-lib:1.0.0");
@@ -151,16 +154,19 @@ class VerifyProjectDependenciesMojoTest {
     @Test
     void testDeferOrReport_lastModuleThrowsWhenFailures() {
         stubSessionStartTime();
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "module-a", "verify-project-dependencies"),
-                createProjectWithGoal("io.apicurio", "module-b", "verify-project-dependencies"));
-        when(mockSession.getProjects()).thenReturn(projects);
+        MavenProject projA = createProjectWithGoal("io.apicurio", "module-a",
+                "verify-project-dependencies");
+        MavenProject projB = createProjectWithGoal("io.apicurio", "module-b",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(projA, projB));
 
+        mojo.project = projA;
         assertDoesNotThrow(() ->
                 mojo.deferOrReport("io.apicurio:module-a:1.0.0",
                         Set.of("com.example:bad-lib:1.0.0"),
                         Set.of("com.example:bad-lib:1.0.0"), Set.of()));
 
+        mojo.project = projB;
         MojoFailureException ex = assertThrows(MojoFailureException.class, () ->
                 mojo.deferOrReport("io.apicurio:module-b:1.0.0",
                         Set.of(), Set.of(), Set.of()));
@@ -172,14 +178,17 @@ class VerifyProjectDependenciesMojoTest {
     @Test
     void testDeferOrReport_lastModuleSucceedsWhenNoFailures() {
         stubSessionStartTime();
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "module-a", "verify-project-dependencies"),
-                createProjectWithGoal("io.apicurio", "module-b", "verify-project-dependencies"));
-        when(mockSession.getProjects()).thenReturn(projects);
+        MavenProject projA = createProjectWithGoal("io.apicurio", "module-a",
+                "verify-project-dependencies");
+        MavenProject projB = createProjectWithGoal("io.apicurio", "module-b",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(projA, projB));
 
+        mojo.project = projA;
         assertDoesNotThrow(() ->
                 mojo.deferOrReport("io.apicurio:module-a:1.0.0", Set.of(), Set.of(), Set.of()));
 
+        mojo.project = projB;
         assertDoesNotThrow(() ->
                 mojo.deferOrReport("io.apicurio:module-b:1.0.0", Set.of(), Set.of(), Set.of()));
     }
@@ -187,16 +196,19 @@ class VerifyProjectDependenciesMojoTest {
     @Test
     void testDeferOrReport_bothModulesHaveFailures() {
         stubSessionStartTime();
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "module-a", "verify-project-dependencies"),
-                createProjectWithGoal("io.apicurio", "module-b", "verify-project-dependencies"));
-        when(mockSession.getProjects()).thenReturn(projects);
+        MavenProject projA = createProjectWithGoal("io.apicurio", "module-a",
+                "verify-project-dependencies");
+        MavenProject projB = createProjectWithGoal("io.apicurio", "module-b",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(projA, projB));
 
+        mojo.project = projA;
         assertDoesNotThrow(() ->
                 mojo.deferOrReport("io.apicurio:module-a:1.0.0",
                         Set.of("com.example:bad-a:1.0"),
                         Set.of("com.example:bad-a:1.0"), Set.of()));
 
+        mojo.project = projB;
         MojoFailureException ex = assertThrows(MojoFailureException.class, () ->
                 mojo.deferOrReport("io.apicurio:module-b:1.0.0",
                         Set.of("com.example:bad-b:2.0"),
@@ -212,23 +224,24 @@ class VerifyProjectDependenciesMojoTest {
     @Test
     void testDeferOrReport_cleansUpStaticState() {
         stubSessionStartTime();
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "module-a", "verify-project-dependencies"));
-        when(mockSession.getProjects()).thenReturn(projects);
+        MavenProject proj = createProjectWithGoal("io.apicurio", "module-a",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(proj));
+        mojo.project = proj;
 
         assertDoesNotThrow(() ->
                 mojo.deferOrReport("io.apicurio:module-a:1.0.0", Set.of(), Set.of(), Set.of()));
 
         assertTrue(VerifyProjectDependenciesMojo.SESSION_RESULTS.isEmpty());
-        assertTrue(VerifyProjectDependenciesMojo.SESSION_COUNTERS.isEmpty());
     }
 
     @Test
     void testDeferOrReport_cleansUpStaticStateOnFailure() {
         stubSessionStartTime();
-        List<MavenProject> projects = List.of(
-                createProjectWithGoal("io.apicurio", "module-a", "verify-project-dependencies"));
-        when(mockSession.getProjects()).thenReturn(projects);
+        MavenProject proj = createProjectWithGoal("io.apicurio", "module-a",
+                "verify-project-dependencies");
+        when(mockSession.getProjects()).thenReturn(List.of(proj));
+        mojo.project = proj;
 
         assertThrows(MojoFailureException.class, () ->
                 mojo.deferOrReport("io.apicurio:module-a:1.0.0",
@@ -236,7 +249,6 @@ class VerifyProjectDependenciesMojoTest {
                         Set.of("com.example:bad:1.0"), Set.of()));
 
         assertTrue(VerifyProjectDependenciesMojo.SESSION_RESULTS.isEmpty());
-        assertTrue(VerifyProjectDependenciesMojo.SESSION_COUNTERS.isEmpty());
     }
 
     // ========================================================================
@@ -334,13 +346,13 @@ class VerifyProjectDependenciesMojoTest {
         PluginExecution exec = new PluginExecution();
         exec.addGoal(goal);
         plugin.addExecution(exec);
-        when(project.getBuildPlugins()).thenReturn(List.of(plugin));
+        lenient().when(project.getBuildPlugins()).thenReturn(List.of(plugin));
         return project;
     }
 
     private MavenProject createProjectWithoutPlugin(String groupId, String artifactId) {
         MavenProject project = mock(MavenProject.class);
-        when(project.getBuildPlugins()).thenReturn(List.of());
+        lenient().when(project.getBuildPlugins()).thenReturn(List.of());
         return project;
     }
 }

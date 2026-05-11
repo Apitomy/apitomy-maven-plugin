@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
@@ -67,8 +66,6 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
 
     static final ConcurrentHashMap<Long, ConcurrentHashMap<String, ModuleResults>>
             SESSION_RESULTS = new ConcurrentHashMap<>();
-    static final ConcurrentHashMap<Long, AtomicInteger>
-            SESSION_COUNTERS = new ConcurrentHashMap<>();
 
     /**
      * The current Maven project whose dependencies will be validated.
@@ -150,22 +147,34 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
         }
     }
 
-    int countExpectedExecutions() {
-        int count = 0;
-        for (MavenProject reactorProject : session.getProjects()) {
-            for (Plugin plugin : reactorProject.getBuildPlugins()) {
-                if (PLUGIN_GROUP_ID.equals(plugin.getGroupId())
-                        && PLUGIN_ARTIFACT_ID.equals(plugin.getArtifactId())) {
-                    for (PluginExecution execution : plugin.getExecutions()) {
-                        if (execution.getGoals().contains(GOAL_NAME)) {
-                            count++;
-                            break;
-                        }
+    /**
+     * Determines whether this is the last reactor module that will execute this goal.
+     *
+     * @return true if the current project is the last in the reactor with this goal configured
+     */
+    boolean isLastExecution() {
+        List<MavenProject> projects = session.getProjects();
+        for (int i = projects.size() - 1; i >= 0; i--) {
+            MavenProject reactorProject = projects.get(i);
+            if (hasVerifyGoal(reactorProject)) {
+                return reactorProject == project;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasVerifyGoal(MavenProject reactorProject) {
+        for (Plugin plugin : reactorProject.getBuildPlugins()) {
+            if (PLUGIN_GROUP_ID.equals(plugin.getGroupId())
+                    && PLUGIN_ARTIFACT_ID.equals(plugin.getArtifactId())) {
+                for (PluginExecution execution : plugin.getExecutions()) {
+                    if (execution.getGoals().contains(GOAL_NAME)) {
+                        return true;
                     }
                 }
             }
         }
-        return Math.max(count, 1);
+        return false;
     }
 
     void deferOrReport(String projectGav, Set<String> unproductizedDependencies,
@@ -173,14 +182,10 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
             Set<String> resolutionErrors) throws MojoFailureException {
 
         long sessionId = session.getStartTime().getTime();
-        int expectedExecutions = countExpectedExecutions();
 
         ConcurrentHashMap<String, ModuleResults> results =
                 SESSION_RESULTS.computeIfAbsent(sessionId,
                         k -> new ConcurrentHashMap<>());
-        AtomicInteger counter =
-                SESSION_COUNTERS.computeIfAbsent(sessionId,
-                        k -> new AtomicInteger(0));
 
         results.put(projectGav, new ModuleResults(projectGav,
                 unproductizedDependencies, unproductizedGavs, resolutionErrors));
@@ -193,16 +198,19 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
         } else {
             getLog().warn("Unproductized dependencies found in " + projectGav
                     + " (will report at end of reactor build).");
+            for (String dep : unproductizedDependencies) {
+                getLog().warn("  " + dep.replace("\n", "\n  "));
+            }
+            for (String err : resolutionErrors) {
+                getLog().warn("  Resolution error: " + err);
+            }
         }
 
-        int completedCount = counter.incrementAndGet();
-
-        if (completedCount >= expectedExecutions) {
+        if (isLastExecution()) {
             try {
                 reportAggregateResults(results);
             } finally {
                 SESSION_RESULTS.remove(sessionId);
-                SESSION_COUNTERS.remove(sessionId);
             }
         }
     }
