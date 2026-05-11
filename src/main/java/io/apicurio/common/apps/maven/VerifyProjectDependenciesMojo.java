@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
@@ -66,6 +67,8 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
 
     static final ConcurrentHashMap<Long, ConcurrentHashMap<String, ModuleResults>>
             SESSION_RESULTS = new ConcurrentHashMap<>();
+    static final ConcurrentHashMap<Long, AtomicInteger>
+            SESSION_COUNTERS = new ConcurrentHashMap<>();
 
     /**
      * The current Maven project whose dependencies will be validated.
@@ -148,19 +151,18 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
     }
 
     /**
-     * Determines whether this is the last reactor module that will execute this goal.
+     * Counts the number of modules in the reactor that have this goal configured.
      *
-     * @return true if the current project is the last in the reactor with this goal configured
+     * @return the expected number of executions, at least 1
      */
-    boolean isLastExecution() {
-        List<MavenProject> projects = session.getProjects();
-        for (int i = projects.size() - 1; i >= 0; i--) {
-            MavenProject reactorProject = projects.get(i);
+    int countExpectedExecutions() {
+        int count = 0;
+        for (MavenProject reactorProject : session.getProjects()) {
             if (hasVerifyGoal(reactorProject)) {
-                return reactorProject == project;
+                count++;
             }
         }
-        return true;
+        return Math.max(count, 1);
     }
 
     private boolean hasVerifyGoal(MavenProject reactorProject) {
@@ -206,11 +208,16 @@ public class VerifyProjectDependenciesMojo extends AbstractVerifyMojo {
             }
         }
 
-        if (isLastExecution()) {
+        AtomicInteger counter = SESSION_COUNTERS.computeIfAbsent(sessionId,
+                k -> new AtomicInteger(0));
+        int completedCount = counter.incrementAndGet();
+
+        if (completedCount >= countExpectedExecutions()) {
             try {
                 reportAggregateResults(results);
             } finally {
                 SESSION_RESULTS.remove(sessionId);
+                SESSION_COUNTERS.remove(sessionId);
             }
         }
     }
