@@ -13,10 +13,11 @@ The verification is split into two goals:
   required productization suffix. Writes results to a JSON file under the reactor root's
   `target/verify-deps/` directory. This goal **never fails the build** on its own.
 
-- **`verify-project-dependencies-report`** — An aggregator goal that runs **once** for the
-  entire reactor build. It reads all JSON result files produced by the collect goal and
-  generates a consolidated report. If any module has unaligned dependencies, it fails the
-  build with a single aggregate error message listing all violations across all modules.
+- **`verify-project-dependencies-report`** — Runs on every module but automatically skips
+  until the last module in the reactor. On the last module, it reads all JSON result files
+  produced by the collect goal and generates a consolidated report. If any module has
+  unaligned dependencies, it fails the build with a single aggregate error message listing
+  all violations across all modules.
 
 ## Basic Configuration
 
@@ -53,69 +54,12 @@ has it configured. The report goal runs once for the entire reactor because it u
 
 ## Running on a Subset of Modules
 
-In many multi-module projects, only certain modules need dependency verification (for example,
-modules that produce deployable artifacts, but not test-only or parent POM modules).
+In many multi-module projects, only certain modules need dependency verification. Both goals
+can be configured together in the same execution block — the report goal automatically skips
+on every module except the last one in the reactor.
 
-### Option A: Declare the Plugin Only in Selected Modules
-
-Place the plugin configuration in the `<build><plugins>` section of only the modules you want
-to verify. The report goal should be declared in the **root POM** (or any single module) so it
-runs once:
-
-**Root POM:**
-
-```xml
-<profile>
-    <id>productized</id>
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>io.apicurio</groupId>
-                <artifactId>apicurio-maven-plugin</artifactId>
-                <version>${apicurio-maven-plugin.version}</version>
-                <executions>
-                    <execution>
-                        <id>verify-productized-report</id>
-                        <goals>
-                            <goal>verify-project-dependencies-report</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
-</profile>
-```
-
-**Selected child modules (e.g. `module-app/pom.xml`, `module-utils/pom.xml`):**
-
-```xml
-<profile>
-    <id>productized</id>
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>io.apicurio</groupId>
-                <artifactId>apicurio-maven-plugin</artifactId>
-                <version>${apicurio-maven-plugin.version}</version>
-                <executions>
-                    <execution>
-                        <id>verify-productized-deps</id>
-                        <goals>
-                            <goal>verify-project-dependencies</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
-</profile>
-```
-
-### Option B: Use `pluginManagement` with Selective Activation
-
-Define the plugin in the root POM's `<pluginManagement>`, then activate it in specific child
-modules:
+To run verification on only specific modules, define the plugin in the root POM's
+`<pluginManagement>` and activate it in the modules you want to verify:
 
 **Root POM:**
 
@@ -134,26 +78,13 @@ modules:
                             <id>verify-productized-deps</id>
                             <goals>
                                 <goal>verify-project-dependencies</goal>
+                                <goal>verify-project-dependencies-report</goal>
                             </goals>
                         </execution>
                     </executions>
                 </plugin>
             </plugins>
         </pluginManagement>
-        <plugins>
-            <plugin>
-                <groupId>io.apicurio</groupId>
-                <artifactId>apicurio-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>verify-productized-report</id>
-                        <goals>
-                            <goal>verify-project-dependencies-report</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
     </build>
 </profile>
 ```
@@ -174,8 +105,9 @@ modules:
 </profile>
 ```
 
-Child modules that do not declare the plugin in `<plugins>` will not run the collect goal,
-even though `<pluginManagement>` defines it.
+Only modules that declare the plugin in `<plugins>` will run the collect goal. The report
+goal runs on every module that has it configured but automatically skips until the last
+reactor module, where it reads all collected results and reports.
 
 ## Configuration Options
 

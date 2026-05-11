@@ -20,20 +20,24 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.project.MavenProject;
 
 /**
  * Aggregates dependency verification results from all reactor modules and reports
  * failures. This mojo reads JSON result files written by the
  * {@code verify-project-dependencies} goal and produces a consolidated report.
  *
- * <p>This mojo uses {@code aggregator = true}, which means Maven executes it exactly
- * once for the entire reactor build rather than once per module.
+ * <p>This mojo runs on every module but skips unless it is the last project in the
+ * reactor, ensuring all collect results are available before reporting.
  *
  * @see VerifyProjectDependenciesCollectMojo
  */
 @Mojo(name = "verify-project-dependencies-report", defaultPhase = LifecyclePhase.VERIFY,
         aggregator = true, threadSafe = true)
 public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
+
+    @Parameter(defaultValue = "${project}", readonly = true, required = true)
+    MavenProject project;
 
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     MavenSession session;
@@ -43,6 +47,13 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
      */
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+        List<MavenProject> projects = session.getProjects();
+        MavenProject lastProject = projects.get(projects.size() - 1);
+        if (project != lastProject) {
+            getLog().debug("Skipping aggregate report — not the last reactor module.");
+            return;
+        }
+
         try {
             List<ModuleReport> allResults = readAllResults();
 

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -52,9 +53,13 @@ class VerifyProjectDependenciesReportMojoTest {
 
         MavenProject topLevelProject = mock(MavenProject.class);
         org.apache.maven.model.Build build = mock(org.apache.maven.model.Build.class);
-        when(build.getDirectory()).thenReturn(tempDir.toString());
-        when(topLevelProject.getBuild()).thenReturn(build);
-        when(mockSession.getTopLevelProject()).thenReturn(topLevelProject);
+        lenient().when(build.getDirectory()).thenReturn(tempDir.toString());
+        lenient().when(topLevelProject.getBuild()).thenReturn(build);
+        lenient().when(mockSession.getTopLevelProject()).thenReturn(topLevelProject);
+
+        MavenProject currentProject = mock(MavenProject.class);
+        mojo.project = currentProject;
+        lenient().when(mockSession.getProjects()).thenReturn(List.of(currentProject));
 
         resultsDir = tempDir.resolve(VerifyProjectDependenciesCollectMojo.RESULTS_DIR);
         Files.createDirectories(resultsDir);
@@ -106,6 +111,21 @@ class VerifyProjectDependenciesReportMojoTest {
     // ========================================================================
     // execute tests
     // ========================================================================
+
+    @Test
+    void testExecute_skipsWhenNotLastModule() throws Exception {
+        MavenProject otherProject = mock(MavenProject.class);
+        when(mockSession.getProjects()).thenReturn(
+                List.of(mojo.project, otherProject));
+
+        ModuleReport report = new ModuleReport("io.apicurio", "module-a", "1.0.0");
+        report.setUnalignedDependencies(List.of(
+                new UnalignedDependency("com.example", "bad", "1.0",
+                        "root -> bad:1.0")));
+        writeResultFile("module-a", report);
+
+        assertDoesNotThrow(() -> mojo.execute());
+    }
 
     @Test
     void testExecute_noResultsDirectory() throws Exception {
