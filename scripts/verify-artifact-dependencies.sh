@@ -4,8 +4,8 @@
 # verify-artifact-dependencies.sh
 #
 # Creates a temporary Maven project with a single dependency and runs the
-# verify-project-dependencies goal to validate that all transitive dependencies
-# are productized.
+# verify-project-dependencies (collect) and verify-project-dependencies-report
+# (report) goals to validate that all transitive dependencies are productized.
 # =============================================================================
 
 set -e
@@ -286,7 +286,8 @@ echo ""
 
 cd "$WORK_DIR"
 set +e
-MAVEN_OPTS="${MAVEN_OPTS_EXTRA} ${MAVEN_OPTS}" mvn clean verify \
+MAVEN_OPTS="${MAVEN_OPTS_EXTRA} ${MAVEN_OPTS}" mvn clean package \
+    "io.apicurio:apicurio-maven-plugin:${PLUGIN_VERSION}:verify-project-dependencies-report" \
     -Dmaven.repo.local="${LOCAL_REPO}"
 MVN_EXIT=$?
 set -e

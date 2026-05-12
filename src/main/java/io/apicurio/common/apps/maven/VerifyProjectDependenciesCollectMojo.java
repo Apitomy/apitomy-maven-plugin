@@ -67,11 +67,11 @@ import org.eclipse.aether.repository.RemoteRepository;
  * </profile>
  * }</pre>
  */
-@Mojo(name = "verify-project-dependencies", defaultPhase = LifecyclePhase.VERIFY,
+@Mojo(name = "verify-project-dependencies", defaultPhase = LifecyclePhase.PACKAGE,
         threadSafe = true)
 public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
 
-    static final String RESULTS_DIR = "verify-deps";
+    static final String RESULTS_DIR = "verify-project-dependencies";
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     MavenProject project;
@@ -198,7 +198,7 @@ public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
     }
 
     /**
-     * Writes the module verification results to a JSON file under the reactor root's
+     * Writes the module verification results to a JSON file under the module's own
      * target directory.
      */
     void writeResultsFile(List<UnalignedDependency> unalignedDeps) throws IOException {
@@ -210,7 +210,7 @@ public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
 
         Path dir = getResultsDir();
         Files.createDirectories(dir);
-        Path file = dir.resolve(project.getArtifactId() + ".json");
+        Path file = dir.resolve("results.json");
 
         ObjectMapper mapper = new ObjectMapper();
         mapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -220,8 +220,7 @@ public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
     }
 
     Path getResultsDir() {
-        return Paths.get(session.getTopLevelProject().getBuild().getDirectory(),
-                RESULTS_DIR);
+        return Paths.get(project.getBuild().getDirectory(), RESULTS_DIR);
     }
 
     /**

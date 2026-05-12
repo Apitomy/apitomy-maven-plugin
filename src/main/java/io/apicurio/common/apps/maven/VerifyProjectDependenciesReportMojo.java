@@ -1,6 +1,5 @@
 package io.apicurio.common.apps.maven;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,10 +46,8 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
      */
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-        List<MavenProject> projects = session.getProjects();
-        MavenProject lastProject = projects.get(projects.size() - 1);
-        if (project != lastProject) {
-            getLog().debug("Skipping aggregate report — not the last reactor module.");
+        // Only run the report if this is the project root
+        if (!project.isExecutionRoot()) {
             return;
         }
 
@@ -75,7 +72,17 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
                 return;
             }
 
-            reportAggregateFailures(failedModules);
+            // De-duplicate and sort the unaligned dependencies across all modules.
+            Set<String> allGavs = new TreeSet<>();
+            for (ModuleReport module : failedModules) {
+                for (UnalignedDependency dep : module.getUnalignedDependencies()) {
+                    allGavs.add(dep.getGroupId() + ":" + dep.getArtifactId() + ":"
+                            + dep.getVersion());
+                }
+            }
+
+            writeCsvReport(allGavs);
+            reportAggregateFailures(failedModules, allGavs);
 
         } catch (MojoFailureException e) {
             throw e;
@@ -86,24 +93,27 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
     }
 
     /**
-     * Reads all JSON result files from the results directory.
+     * Reads all JSON result files from each reactor module's build directory.
      */
     List<ModuleReport> readAllResults() throws IOException {
-        Path dir = getResultsDir();
-        if (!Files.isDirectory(dir)) {
-            return List.of();
-        }
-
         ObjectMapper mapper = new ObjectMapper();
         List<ModuleReport> results = new ArrayList<>();
 
-        try (Stream<Path> files = Files.list(dir)) {
-            for (Path file : (Iterable<Path>) files.filter(
-                    p -> p.toString().endsWith(".json"))::iterator) {
-                VerifyResultsFile resultsFile = mapper.readValue(
-                        file.toFile(), VerifyResultsFile.class);
-                if (resultsFile.getModule() != null) {
-                    results.add(resultsFile.getModule());
+        for (MavenProject reactorProject : session.getProjects()) {
+            Path dir = Paths.get(reactorProject.getBuild().getDirectory(),
+                    VerifyProjectDependenciesCollectMojo.RESULTS_DIR);
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+
+            try (Stream<Path> files = Files.list(dir)) {
+                for (Path file : (Iterable<Path>) files.filter(
+                        p -> p.toString().endsWith(".json"))::iterator) {
+                    VerifyResultsFile resultsFile = mapper.readValue(
+                            file.toFile(), VerifyResultsFile.class);
+                    if (resultsFile.getModule() != null) {
+                        results.add(resultsFile.getModule());
+                    }
                 }
             }
         }
@@ -113,56 +123,60 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
 
     /**
      * Builds and throws the aggregate failure report.
+     *
+     * @param failedModules the modules that have unaligned dependencies
+     * @param allGavs the de-duplicated, sorted set of unaligned GAV strings
+     * @throws MojoFailureException always, containing the formatted report
      */
-    void reportAggregateFailures(List<ModuleReport> failedModules)
+    void reportAggregateFailures(List<ModuleReport> failedModules, Set<String> allGavs)
             throws MojoFailureException {
 
-        int totalUnaligned = 0;
-        for (ModuleReport module : failedModules) {
-            totalUnaligned += module.getUnalignedDependencies().size();
-        }
+        int totalUnaligned = allGavs.size();
 
         StringBuilder message = new StringBuilder();
         message.append("\n");
         message.append("=== Aggregate Dependency Verification Results ===\n");
-
-        for (ModuleReport module : failedModules) {
-            message.append("\n--- ").append(module.gav()).append(" ---\n");
-            message.append("  Unaligned dependencies:\n");
-            for (UnalignedDependency dep : module.getUnalignedDependencies()) {
-                message.append("    ")
-                        .append(dep.getHierarchy().replace("\n", "\n    "))
-                        .append("\n\n");
-            }
-        }
-
-        message.append("\n=== Summary: ")
+        message.append("=== Summary: ")
                 .append(failedModules.size()).append(" module(s) with failures, ")
                 .append(totalUnaligned).append(" unaligned dep(s) ===\n");
 
-        Set<String> allGavs = new TreeSet<>();
-        for (ModuleReport module : failedModules) {
-            for (UnalignedDependency dep : module.getUnalignedDependencies()) {
-                allGavs.add(dep.getGroupId() + ":" + dep.getArtifactId() + ":"
-                        + dep.getVersion());
-            }
-        }
         if (!allGavs.isEmpty()) {
-            message.append("\n======================================================="
-                    + "===========\n");
+            message.append("\n==================================================================\n");
             for (String gav : allGavs) {
                 message.append("- ").append(gav).append("\n");
             }
-            message.append("======================================================="
-                    + "===========\n");
+            message.append("==================================================================\n");
         }
 
         throw new MojoFailureException(message.toString());
     }
 
-    Path getResultsDir() {
-        return Paths.get(session.getTopLevelProject().getBuild().getDirectory(),
-                VerifyProjectDependenciesCollectMojo.RESULTS_DIR);
+    /**
+     * Writes a CSV file listing all unaligned GAVs to the root project's target directory.
+     * The file contains columns {@code groupId}, {@code artifactId}, and {@code version}.
+     *
+     * @param allGavs the de-duplicated, sorted set of unaligned GAV strings
+     * @throws IOException if the file cannot be written
+     */
+    void writeCsvReport(Set<String> allGavs) throws IOException {
+        if (allGavs.isEmpty()) {
+            return;
+        }
+
+        Path targetDir = Paths.get(project.getBuild().getDirectory());
+        Files.createDirectories(targetDir);
+        Path csvPath = targetDir.resolve("unaligned-dependencies.csv");
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("groupId,artifactId,version\n");
+        for (String gav : allGavs) {
+            String[] parts = gav.split(":", 3);
+            csv.append(parts[0]).append(",").append(parts[1]).append(",")
+                    .append(parts[2]).append("\n");
+        }
+
+        Files.writeString(csvPath, csv.toString());
+        getLog().info("CSV report written to: " + csvPath.toAbsolutePath());
     }
 
 }
