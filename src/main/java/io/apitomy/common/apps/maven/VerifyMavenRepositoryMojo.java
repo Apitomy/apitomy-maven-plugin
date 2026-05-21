@@ -1,4 +1,4 @@
-package io.apicurio.common.apps.maven;
+package io.apitomy.common.apps.maven;
 
 import java.io.File;
 import java.io.IOException;
@@ -70,7 +70,7 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
     File repositoryZip;
 
     /**
-     * List of patterns to match artifact IDs to validate (e.g. {@code apicurio-*}).
+     * List of patterns to match artifact IDs to validate (e.g. {@code apitomy-*}).
      * Only artifacts whose artifactId matches at least one of these patterns will have their
      * full transitive dependency tree resolved and validated. Supports wildcard patterns.
      */

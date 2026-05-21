@@ -1,4 +1,4 @@
-package io.apicurio.common.apps.maven;
+package io.apitomy.common.apps.maven;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,7 +26,7 @@ public abstract class AbstractVerifyMojo extends AbstractMojo {
 
     /**
      * List of groupId:artifactId patterns for dependencies to ignore during validation.
-     * Supports wildcard patterns using {@code *} (e.g. {@code io.apicurio:*}).
+     * Supports wildcard patterns using {@code *} (e.g. {@code io.apitomy:*}).
      * Matching dependencies will not be flagged even if they are unproductized.
      */
     @Parameter(property = "ignoreGAVs")

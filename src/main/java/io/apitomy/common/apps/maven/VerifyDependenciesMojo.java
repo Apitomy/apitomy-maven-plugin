@@ -1,4 +1,4 @@
-package io.apicurio.common.apps.maven;
+package io.apitomy.common.apps.maven;
 
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;

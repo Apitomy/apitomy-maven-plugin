@@ -1,4 +1,4 @@
-package io.apicurio.common.apps.maven;
+package io.apitomy.common.apps.maven;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -32,8 +32,8 @@ import org.eclipse.aether.resolution.ArtifactResolutionException;
  * <p>This mojo does not require a Maven project and can be run directly from the command
  * line. Example usage:
  * <pre>{@code
- * mvn io.apicurio:apicurio-maven-plugin:0.0.5-SNAPSHOT:verify-artifact-dependencies \
- *     -Dartifact=io.apicurio:apicurio-registry-app:3.0.0-redhat-00001 \
+ * mvn io.apitomy:apitomy-maven-plugin:0.0.5-SNAPSHOT:verify-artifact-dependencies \
+ *     -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
  *     -DremoteRepositories=https://repo1.maven.org/maven2
  * }</pre>
  *

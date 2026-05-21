@@ -42,9 +42,9 @@ whose dependencies you want to verify:
     <build>
         <plugins>
             <plugin>
-                <groupId>io.apicurio</groupId>
-                <artifactId>apicurio-maven-plugin</artifactId>
-                <version>${apicurio-maven-plugin.version}</version>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-maven-plugin</artifactId>
+                <version>${apitomy-maven-plugin.version}</version>
                 <executions>
                     <execution>
                         <id>verify-productized-deps</id>
@@ -71,9 +71,9 @@ To avoid repeating configuration across many modules, define the plugin in the r
         <pluginManagement>
             <plugins>
                 <plugin>
-                    <groupId>io.apicurio</groupId>
-                    <artifactId>apicurio-maven-plugin</artifactId>
-                    <version>${apicurio-maven-plugin.version}</version>
+                    <groupId>io.apitomy</groupId>
+                    <artifactId>apitomy-maven-plugin</artifactId>
+                    <version>${apitomy-maven-plugin.version}</version>
                     <executions>
                         <execution>
                             <id>verify-productized-deps</id>
@@ -97,8 +97,8 @@ To avoid repeating configuration across many modules, define the plugin in the r
     <build>
         <plugins>
             <plugin>
-                <groupId>io.apicurio</groupId>
-                <artifactId>apicurio-maven-plugin</artifactId>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
@@ -112,7 +112,7 @@ then invoke the report goal explicitly using its fully qualified goal name:
 
 ```bash
 mvn clean package \
-    io.apicurio:apicurio-maven-plugin:verify-project-dependencies-report
+    io.apitomy:apitomy-maven-plugin:verify-project-dependencies-report
 ```
 
 If the collect goal is configured inside a profile, activate that profile as well (e.g.
@@ -126,7 +126,7 @@ You can also pin the plugin version in the command:
 
 ```bash
 mvn clean package \
-    io.apicurio:apicurio-maven-plugin:0.0.16-SNAPSHOT:verify-project-dependencies-report
+    io.apitomy:apitomy-maven-plugin:0.0.16-SNAPSHOT:verify-project-dependencies-report
 ```
 
 ## Configuration Options
@@ -163,11 +163,11 @@ Example with ignore patterns:
 Each module that runs the collect goal logs its results during the `package` phase:
 
 ```
-[INFO] Verifying dependencies for: io.apicurio:my-module:1.0.0
+[INFO] Verifying dependencies for: io.apitomy:my-module:1.0.0
 [INFO] === Project Dependency Verification Results ===
 [INFO]   Unaligned dependencies: 3
-[WARNING] Unaligned dependencies found in io.apicurio:my-module:1.0.0 (will report at end of reactor build).
-[WARNING]   io.apicurio:my-module:1.0.0 (compile)
+[WARNING] Unaligned dependencies found in io.apitomy:my-module:1.0.0 (will report at end of reactor build).
+[WARNING]   io.apitomy:my-module:1.0.0 (compile)
     -> com.example:unaligned-lib:1.0 (compile)
 ```
 
@@ -176,7 +176,7 @@ It also writes a JSON results file to `target/verify-project-dependencies/result
 ```json
 {
   "module": {
-    "groupId": "io.apicurio",
+    "groupId": "io.apitomy",
     "artifactId": "my-module",
     "version": "1.0.0",
     "unalignedDependencies": [
@@ -184,7 +184,7 @@ It also writes a JSON results file to `target/verify-project-dependencies/result
         "groupId": "com.example",
         "artifactId": "unaligned-lib",
         "version": "1.0",
-        "hierarchy": "io.apicurio:my-module:1.0.0 (compile)\n  -> com.example:unaligned-lib:1.0 (compile)"
+        "hierarchy": "io.apitomy:my-module:1.0.0 (compile)\n  -> com.example:unaligned-lib:1.0 (compile)"
       }
     ]
   }

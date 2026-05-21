@@ -72,7 +72,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --csv PATH              Path to CSV output file"
             echo "  --workDir PATH          Working directory for the generated project [prompted if omitted]"
             echo "  --cleanup BOOL          Delete working directory after completion (default: true)"
-            echo "  --plugin-version VER    Version of apicurio-maven-plugin to use (default: ${PLUGIN_VERSION})"
+            echo "  --plugin-version VER    Version of apitomy-maven-plugin to use (default: ${PLUGIN_VERSION})"
             echo "  --help, -h              Show this help message"
             exit 0
             ;;
@@ -246,8 +246,8 @@ ${REPO_XML}    </repositories>
     <build>
         <plugins>
             <plugin>
-                <groupId>io.apicurio</groupId>
-                <artifactId>apicurio-maven-plugin</artifactId>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-maven-plugin</artifactId>
                 <version>${PLUGIN_VERSION}</version>
                 <executions>
                     <execution>
@@ -287,7 +287,7 @@ echo ""
 cd "$WORK_DIR"
 set +e
 MAVEN_OPTS="${MAVEN_OPTS_EXTRA} ${MAVEN_OPTS}" mvn clean package \
-    "io.apicurio:apicurio-maven-plugin:${PLUGIN_VERSION}:verify-project-dependencies-report" \
+    "io.apitomy:apitomy-maven-plugin:${PLUGIN_VERSION}:verify-project-dependencies-report" \
     -Dmaven.repo.local="${LOCAL_REPO}"
 MVN_EXIT=$?
 set -e

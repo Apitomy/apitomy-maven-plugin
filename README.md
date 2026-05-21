@@ -1,6 +1,6 @@
-## Apicurio Maven Plugin
+## Apitomy Maven Plugin
 
-A collection of Maven plugin goals used by Apicurio projects, primarily for validating that
+A collection of Maven plugin goals used by Apitomy projects, primarily for validating that
 dependencies in productized (Red Hat) builds are properly aligned.
 
 ### Goals Overview
@@ -24,9 +24,9 @@ input files after merging.
 
 ```xml
 <plugin>
-    <groupId>io.apicurio</groupId>
-    <artifactId>apicurio-maven-plugin</artifactId>
-    <version>${apicurio-maven-plugin.version}</version>
+    <groupId>io.apitomy</groupId>
+    <artifactId>apitomy-maven-plugin</artifactId>
+    <version>${apitomy-maven-plugin.version}</version>
     <executions>
         <execution>
             <goals>
@@ -65,9 +65,9 @@ simple file-name-based check — it does not resolve Maven dependency trees.
 
 ```xml
 <plugin>
-    <groupId>io.apicurio</groupId>
-    <artifactId>apicurio-maven-plugin</artifactId>
-    <version>${apicurio-maven-plugin.version}</version>
+    <groupId>io.apitomy</groupId>
+    <artifactId>apitomy-maven-plugin</artifactId>
+    <version>${apitomy-maven-plugin.version}</version>
     <executions>
         <execution>
             <goals>
@@ -114,27 +114,27 @@ validating PNC-produced offline Maven repositories before delivery.
 #### Command Line Usage
 
 ```bash
-mvn io.apicurio:apicurio-maven-plugin:verify-maven-repository \
+mvn io.apitomy:apitomy-maven-plugin:verify-maven-repository \
     -DrepositoryZip=/path/to/maven-repository.zip \
-    -DartifactIncludes=apicurio-* \
+    -DartifactIncludes=apitomy-* \
     -Dverify.verbose=true
 ```
 
 With a repository directory instead of a zip:
 
 ```bash
-mvn io.apicurio:apicurio-maven-plugin:verify-maven-repository \
+mvn io.apitomy:apitomy-maven-plugin:verify-maven-repository \
     -DrepositoryDirectory=/path/to/maven-repository \
-    -DartifactIncludes=apicurio-*
+    -DartifactIncludes=apitomy-*
 ```
 
 With excludes, ignores, and CSV output:
 
 ```bash
-mvn io.apicurio:apicurio-maven-plugin:verify-maven-repository \
+mvn io.apitomy:apitomy-maven-plugin:verify-maven-repository \
     -DrepositoryZip=/path/to/maven-repository.zip \
-    -DartifactIncludes=apicurio-* \
-    -DartifactExcludes=apicurio-registry-utils-tests,*-parent \
+    -DartifactIncludes=apitomy-* \
+    -DartifactExcludes=apitomy-registry-utils-tests,*-parent \
     -DignoreGAVs=org.example:* \
     -DoutputCsv=/tmp/unproductized.csv
 ```
@@ -145,9 +145,9 @@ mvn io.apicurio:apicurio-maven-plugin:verify-maven-repository \
 |-----------|----------|---------|-------------|
 | `repositoryDirectory` | No* | — | Path to an offline Maven repository directory. |
 | `repositoryZip` | No* | — | Path to a `.zip` file containing an offline Maven repository. |
-| `artifactIncludes` | Yes | — | Comma-separated wildcard patterns to match artifact IDs to validate (e.g. `apicurio-*`). |
+| `artifactIncludes` | Yes | — | Comma-separated wildcard patterns to match artifact IDs to validate (e.g. `apitomy-*`). |
 | `artifactExcludes` | No | — | Comma-separated wildcard patterns to exclude artifact IDs from validation. |
-| `ignoreGAVs` | No | — | Comma-separated `groupId:artifactId` patterns for dependencies to skip (e.g. `io.apicurio:*`). |
+| `ignoreGAVs` | No | — | Comma-separated `groupId:artifactId` patterns for dependencies to skip (e.g. `io.apitomy:*`). |
 | `verbose` | No | `false` | Enable verbose output (`-Dverify.verbose=true`). |
 | `outputCsv` | No | — | Path to write a CSV file of unproductized dependencies. |
 
@@ -169,9 +169,9 @@ activated via a Maven profile during productized builds.
     <build>
         <plugins>
             <plugin>
-                <groupId>io.apicurio</groupId>
-                <artifactId>apicurio-maven-plugin</artifactId>
-                <version>${apicurio-maven-plugin.version}</version>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-maven-plugin</artifactId>
+                <version>${apitomy-maven-plugin.version}</version>
                 <executions>
                     <execution>
                         <goals>
@@ -214,24 +214,24 @@ verification.
 Basic usage with Maven Central:
 
 ```bash
-mvn io.apicurio:apicurio-maven-plugin:verify-artifact-dependencies \
-    -Dartifact=io.apicurio:apicurio-registry-app:3.0.0-redhat-00001 \
+mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
+    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
     -DremoteRepositories=https://repo1.maven.org/maven2
 ```
 
 With multiple remote repositories (using `id::url` format):
 
 ```bash
-mvn io.apicurio:apicurio-maven-plugin:verify-artifact-dependencies \
-    -Dartifact=io.apicurio:apicurio-registry-app:3.0.0-redhat-00001 \
+mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
+    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
     -DremoteRepositories=central::https://repo1.maven.org/maven2,jboss::https://repository.jboss.org/nexus/content/groups/public
 ```
 
 With a local/offline repository (bypasses the `~/.m2` cache):
 
 ```bash
-mvn io.apicurio:apicurio-maven-plugin:verify-artifact-dependencies \
-    -Dartifact=io.apicurio:apicurio-registry-app:3.0.0-redhat-00001 \
+mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
+    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
     -DlocalRepository=/path/to/offline/maven-repository \
     -Dverify.verbose=true
 ```
@@ -239,8 +239,8 @@ mvn io.apicurio:apicurio-maven-plugin:verify-artifact-dependencies \
 With SSL verification disabled (for repos with self-signed certificates):
 
 ```bash
-mvn io.apicurio:apicurio-maven-plugin:verify-artifact-dependencies \
-    -Dartifact=io.apicurio:apicurio-registry-app:3.0.0-redhat-00001 \
+mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
+    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
     -DremoteRepositories=https://my-internal-repo.example.com/maven2 \
     -Dinsecure=true
 ```
@@ -249,8 +249,8 @@ Exemplar when running the tool to validate a dependency against Indy:
 
 ```bash
 rm -rf /tmp/empty-repo
-mvn io.apicurio:apicurio-maven-plugin:0.0.8:verify-artifact-dependencies \
-    -Dartifact=io.apicurio:apicurio-registry-schema-resolver:3.1.6.redhat-00011 \
+mvn io.apitomy:apitomy-maven-plugin:0.0.8:verify-artifact-dependencies \
+    -Dartifact=io.apitomy:apitomy-registry-schema-resolver:3.1.6.redhat-00011 \
     -DremoteRepositories=https://indy.corp.redhat.com/api/content/maven/group/static \
     -DlocalRepository=/tmp/empty-repo \
     -Dinsecure=true \

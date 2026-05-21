@@ -3,21 +3,21 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.apicurio</groupId>
-    <artifactId>apicurio-maven-plugin</artifactId>
-    <version>0.0.17-SNAPSHOT</version>
+    <groupId>io.apitomy</groupId>
+    <artifactId>apitomy-maven-plugin</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
 
     <packaging>maven-plugin</packaging>
 
-    <url>https://www.apicur.io/</url>
-    <description>Apicurio Maven Plugin.</description>
+    <url>https://www.apitomy.io/</url>
+    <description>Apitomy Maven Plugin.</description>
 
     <organization>
-        <name>Red Hat</name>
-        <url>https://www.redhat.com/</url>
+        <name>Apitomy</name>
+        <url>https://www.apitomy.io</url>
     </organization>
 
-    <name>apicurio-registry-maven-plugin</name>
+    <name>apitomy-maven-plugin</name>
 
     <developers>
         <developer>
@@ -42,16 +42,18 @@
 
     <issueManagement>
         <system>GitHub</system>
-        <url>https://github.com/Apicurio/apicurio-maven-plugin/issues</url>
+        <url>https://github.com/Apitomy/apitomy-maven-plugin/issues</url>
     </issueManagement>
 
     <scm>
-        <connection>scm:git:git@github.com:apicurio/apicurio-registry-schema-validation.git</connection>
-        <developerConnection>scm:git:git@github.com:apicurio/apicurio-registry-schema-validation.git</developerConnection>
-        <url>scm:git:git@github.com:apicurio/apicurio-registry-schema-validation.git</url>
+        <connection>scm:git:git@github.com:Apitomy/apitomy-maven-plugin.git</connection>
+        <developerConnection>scm:git:git@github.com:Apitomy/apitomy-maven-plugin.git</developerConnection>
+        <url>scm:git:git@github.com:Apitomy/apitomy-maven-plugin.git</url>
     </scm>
 
     <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
     </properties>
@@ -147,6 +149,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <version>3.12.0</version>
+                <configuration>
+                    <doclint>none</doclint>
+                </configuration>
                 <executions>
                     <execution>
                         <id>attach-javadocs</id>

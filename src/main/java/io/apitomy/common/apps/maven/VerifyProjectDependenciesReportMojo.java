@@ -1,4 +1,4 @@
-package io.apicurio.common.apps.maven;
+package io.apitomy.common.apps.maven;
 
 import java.io.IOException;
 import java.nio.file.Files;

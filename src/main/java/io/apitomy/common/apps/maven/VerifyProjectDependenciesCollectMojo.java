@@ -1,4 +1,4 @@
-package io.apicurio.common.apps.maven;
+package io.apitomy.common.apps.maven;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -51,8 +51,8 @@ import org.eclipse.aether.repository.RemoteRepository;
  *     <build>
  *         <plugins>
  *             <plugin>
- *                 <groupId>io.apicurio</groupId>
- *                 <artifactId>apicurio-maven-plugin</artifactId>
+ *                 <groupId>io.apitomy</groupId>
+ *                 <artifactId>apitomy-maven-plugin</artifactId>
  *                 <executions>
  *                     <execution>
  *                         <goals>

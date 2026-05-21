@@ -1,4 +1,4 @@
-package io.apicurio.common.apps.maven;
+package io.apitomy.common.apps.maven;
 
 /**
  * Represents a single unaligned (unproductized) dependency found during verification.
