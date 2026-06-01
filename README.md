@@ -1,3 +1,5 @@
+[![Verify Build Workflow](https://github.com/Apitomy/apitomy-maven-plugin/actions/workflows/verify.yaml/badge.svg)](https://github.com/Apitomy/apitomy-maven-plugin/actions/workflows/verify.yaml?query=branch%3Amain)
+
 # Apitomy Maven Plugin
 
 A collection of Maven plugin goals used by Apitomy projects, primarily for validating that
