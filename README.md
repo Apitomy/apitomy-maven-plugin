@@ -1,4 +1,4 @@
-## Apitomy Maven Plugin
+# Apitomy Maven Plugin
 
 A collection of Maven plugin goals used by Apitomy projects, primarily for validating that
 dependencies in productized (Red Hat) builds are properly aligned.
@@ -294,3 +294,17 @@ deduplicated and sorted.
 All verification goals support verbose output via `-Dverify.verbose=true`. When enabled,
 the goals log detailed information about dependency tree resolution, artifact matching, and
 validation results.
+
+## Links
+
+- [Maven Central](https://central.sonatype.com/artifact/io.apitomy/apitomy-maven-plugin)
+- [GitHub Repository](https://github.com/Apitomy/apitomy-maven-plugin)
+- [Apitomy Website](https://www.apitomy.io)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
