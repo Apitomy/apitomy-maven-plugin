@@ -85,7 +85,7 @@
         <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-xml</artifactId>
-            <version>3.0.2</version>
+            <version>4.1.1</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -97,7 +97,7 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.14.4</version>
+            <version>6.1.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
