@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The documented workflow: the collect goal is bound in the build, and the report goal is
+    invoked from the command line after the reactor has been packaged. The build must fail
+    with the aggregate report listing the unaligned dependency from mod-a.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.apitomy.it</groupId>
+    <artifactId>report-invoked-from-cli</artifactId>
+    <version>1.0.0-redhat-00001</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>mod-a</module>
+    </modules>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-maven-plugin</artifactId>
+                <version>@project.version@</version>
+                <executions>
+                    <execution>
+                        <id>verify-deps</id>
+                        <goals>
+                            <goal>verify-project-dependencies</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

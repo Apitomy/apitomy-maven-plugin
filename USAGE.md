@@ -129,6 +129,19 @@ mvn clean package \
     io.apitomy:apitomy-maven-plugin:0.0.16-SNAPSHOT:verify-project-dependencies-report
 ```
 
+### Safeguards Against a Silent Pass
+
+A report that runs at the wrong moment, or with nothing to aggregate, would pass a build that was
+never actually verified. The report goal therefore fails rather than staying quiet when:
+
+- **It runs before the reactor is finished.** Adding `verify-project-dependencies-report` to an
+  `<executions>` block binds it to a lifecycle phase of the *execution root*, which Maven builds
+  first — so it would aggregate results that no module has written yet. The goal detects the
+  reactor modules that have not been built and fails, naming them. Invoke it from the command line
+  as shown above instead of binding it.
+- **No module produced results.** If no `results.json` is found anywhere in the reactor, nothing was
+  verified, and the goal fails pointing at the `verify-project-dependencies` configuration.
+
 ## Configuration Options
 
 The collect goal inherits the following parameters from the base verification mojo:

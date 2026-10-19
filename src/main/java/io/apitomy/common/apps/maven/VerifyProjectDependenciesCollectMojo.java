@@ -44,7 +44,8 @@ import org.eclipse.aether.repository.RemoteRepository;
  * fails the build directly; instead it writes its results to disk so the aggregator
  * report mojo can produce a consolidated report across all reactor modules.
  *
- * <p>Typical usage is to enable both goals via a Maven profile:
+ * <p>Typical usage is to enable this goal via a Maven profile in each module whose
+ * dependencies should be verified:
  * <pre>{@code
  * <profile>
  *     <id>productized</id>
@@ -57,7 +58,6 @@ import org.eclipse.aether.repository.RemoteRepository;
  *                     <execution>
  *                         <goals>
  *                             <goal>verify-project-dependencies</goal>
- *                             <goal>verify-project-dependencies-report</goal>
  *                         </goals>
  *                     </execution>
  *                 </executions>
@@ -66,6 +66,16 @@ import org.eclipse.aether.repository.RemoteRepository;
  *     </build>
  * </profile>
  * }</pre>
+ *
+ * <p>Do <strong>not</strong> add {@code verify-project-dependencies-report} to the same
+ * execution. That goal is an aggregator and would run during the execution root's build,
+ * before any module has collected anything. Invoke it from the command line instead:
+ * <pre>{@code
+ * mvn clean package -Pproductized \
+ *     io.apitomy:apitomy-maven-plugin:verify-project-dependencies-report
+ * }</pre>
+ *
+ * <p>See {@code USAGE.md} for the full workflow.
  */
 @Mojo(name = "verify-project-dependencies", defaultPhase = LifecyclePhase.PACKAGE,
         threadSafe = true)
