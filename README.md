@@ -77,6 +77,10 @@ a simple file-name-based check — it does not resolve Maven dependency trees.
                 <goal>verify-dependencies</goal>
             </goals>
             <configuration>
+                <!-- Optional: defaults to 'ibm'. -->
+                <productizationModes>
+                    <productizationMode>ibm</productizationMode>
+                </productizationModes>
                 <fileTypes>
                     <fileType>jar</fileType>
                 </fileTypes>
@@ -143,6 +147,15 @@ mvn io.apitomy:apitomy-maven-plugin:verify-maven-repository \
     -DoutputCsv=/tmp/unproductized.csv
 ```
 
+Validating a repository that still contains Red Hat-aligned artifacts alongside IBM ones:
+
+```bash
+mvn io.apitomy:apitomy-maven-plugin:verify-maven-repository \
+    -DrepositoryZip=/path/to/maven-repository.zip \
+    -DartifactIncludes=apitomy-* \
+    -DproductizationModes=ibm,redhat
+```
+
 #### Parameters
 
 | Parameter | Required | Default | Description |
@@ -183,6 +196,10 @@ activated via a Maven profile during productized builds.
                             <goal>verify-project-dependencies</goal>
                         </goals>
                         <configuration>
+                            <!-- Optional: defaults to 'ibm'. List both during a migration. -->
+                            <productizationModes>
+                                <productizationMode>ibm</productizationMode>
+                            </productizationModes>
                             <ignoreGAVs>
                                 <ignoreGAV>org.example:*</ignoreGAV>
                             </ignoreGAVs>

@@ -52,6 +52,12 @@ whose dependencies you want to verify:
                         <goals>
                             <goal>verify-project-dependencies</goal>
                         </goals>
+                        <configuration>
+                            <!-- Optional: 'ibm' is the default. -->
+                            <productizationModes>
+                                <productizationMode>ibm</productizationMode>
+                            </productizationModes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -170,6 +176,39 @@ Example with ignore patterns:
     </configuration>
 </execution>
 ```
+
+### Choosing Productization Modes
+
+`productizationModes` selects which productization suffixes count as aligned. It defaults to
+`ibm` (`-ibm-` and `.ibm-`); `redhat` accepts `-redhat-` and `.redhat-` instead. A dependency is
+aligned if it matches any configured mode, so listing both is how a repository that still mixes
+Red Hat and IBM artifacts validates cleanly during the migration:
+
+```xml
+<execution>
+    <id>verify-productized-deps</id>
+    <goals>
+        <goal>verify-project-dependencies</goal>
+    </goals>
+    <configuration>
+        <productizationModes>
+            <productizationMode>ibm</productizationMode>
+            <productizationMode>redhat</productizationMode>
+        </productizationModes>
+    </configuration>
+</execution>
+```
+
+The same set can be supplied on the command line, which is useful for a one-off check without
+editing the POM:
+
+```bash
+mvn clean package -Pproductized -DproductizationModes=ibm,redhat \
+    io.apitomy:apitomy-maven-plugin:verify-project-dependencies-report
+```
+
+Note that the report goal reads the results the collect goal wrote, so the modes that matter are
+the ones in effect when the collect goal ran. Set them in the same place.
 
 ## Output
 

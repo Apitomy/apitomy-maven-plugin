@@ -60,6 +60,11 @@ import org.eclipse.aether.repository.RemoteRepository;
  *                         <goals>
  *                             <goal>verify-project-dependencies</goal>
  *                         </goals>
+ *                         <configuration>
+ *                             <productizationModes>
+ *                                 <productizationMode>ibm</productizationMode>
+ *                             </productizationModes>
+ *                         </configuration>
  *                     </execution>
  *                 </executions>
  *             </plugin>
