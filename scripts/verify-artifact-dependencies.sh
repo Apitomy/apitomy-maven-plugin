@@ -15,6 +15,7 @@ ARTIFACT=""
 REPOSITORIES=""
 INSECURE="true"
 IGNORE_GAVS=""
+MODES=""
 VERBOSE="true"
 CSV=""
 WORK_DIR=""
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --ignoreGAVs)
             IGNORE_GAVS="$2"
+            shift 2
+            ;;
+        --modes)
+            MODES="$2"
             shift 2
             ;;
         --verbose)
@@ -68,6 +73,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --repositories URLS     Comma-separated remote repository URLs [prompted if omitted]"
             echo "  --insecure BOOL         Disable SSL certificate verification (default: true)"
             echo "  --ignoreGAVs PATTERNS   Comma-separated groupId:artifactId patterns to skip"
+            echo "  --modes MODES           Comma-separated productization modes: ibm, redhat (default: ibm)"
             echo "  --verbose BOOL          Enable verbose output (default: true)"
             echo "  --csv PATH              Path to CSV output file"
             echo "  --workDir PATH          Working directory for the generated project [prompted if omitted]"
@@ -144,6 +150,7 @@ echo "Repos:     ${REPOSITORIES}"
 echo "Insecure:  ${INSECURE}"
 echo "Verbose:   ${VERBOSE}"
 [[ -n "$IGNORE_GAVS" ]] && echo "Ignoring:  ${IGNORE_GAVS}"
+echo "Modes:     ${MODES:-ibm (default)}"
 [[ -n "$CSV" ]] && echo "CSV:       ${CSV}"
 
 # ---- Determine working directory ----
@@ -208,6 +215,20 @@ if [[ -n "$IGNORE_GAVS" ]]; then
     IGNORE_XML+="                        </ignoreGAVs>"
 fi
 
+# ---- Build productizationModes XML fragment ----
+MODES_XML=""
+if [[ -n "$MODES" ]]; then
+    MODES_XML="                        <productizationModes>
+"
+    IFS=',' read -ra MODE_LIST <<< "$MODES"
+    for MODE in "${MODE_LIST[@]}"; do
+        MODE=$(echo "$MODE" | xargs)
+        MODES_XML+="                            <productizationMode>${MODE}</productizationMode>
+"
+    done
+    MODES_XML+="                        </productizationModes>"
+fi
+
 # ---- Build outputCsv XML fragment ----
 CSV_XML=""
 if [[ -n "$CSV" ]]; then
@@ -256,6 +277,7 @@ ${REPO_XML}    </repositories>
                         </goals>
                         <configuration>
                             <verbose>${VERBOSE}</verbose>
+${MODES_XML}
 ${IGNORE_XML}
 ${CSV_XML}
                         </configuration>

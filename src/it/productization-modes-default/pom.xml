@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    No productizationModes configured, so the default ('ibm') applies: the IBM-suffixed file is
+    accepted and the Red Hat-suffixed one is reported as unproductized.
+
+    The fixtures use the 'txt' extension because the repository's .gitignore excludes *.jar;
+    the goal matches on file name and extension, so the extension is immaterial to the check.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.apitomy.it</groupId>
+    <artifactId>productization-modes-default</artifactId>
+    <version>1.0.0-ibm-00002</version>
+    <packaging>pom</packaging>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-maven-plugin</artifactId>
+                <version>@project.version@</version>
+                <executions>
+                    <execution>
+                        <id>verify-deps</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>verify-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <fileTypes>
+                                <fileType>txt</fileType>
+                            </fileTypes>
+                            <directories>
+                                <directory>${project.basedir}/lib</directory>
+                            </directories>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

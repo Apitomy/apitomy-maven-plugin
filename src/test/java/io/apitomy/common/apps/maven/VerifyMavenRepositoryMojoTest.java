@@ -49,12 +49,43 @@ class VerifyMavenRepositoryMojoTest {
     // ========================================================================
 
     @Test
-    void testIsProductized_redhatDash() {
+    void testIsProductized_ibmDashByDefault() {
+        assertTrue(mojo.isProductized("1.0.0-ibm-00002"));
+    }
+
+    @Test
+    void testIsProductized_ibmDotByDefault() {
+        assertTrue(mojo.isProductized("2.15.0.ibm-00004"));
+    }
+
+    @Test
+    void testIsProductized_redhatRejectedByDefault() {
+        assertFalse(mojo.isProductized("1.0.0-redhat-00001"),
+                "The default mode is 'ibm', so a Red Hat suffix is not productized");
+    }
+
+    @Test
+    void testIsProductized_redhatDashWhenRedhatModeConfigured() {
+        mojo.productizationModes = List.of("redhat");
         assertTrue(mojo.isProductized("1.0.0-redhat-00001"));
     }
 
     @Test
-    void testIsProductized_redhatDot() {
+    void testIsProductized_redhatDotWhenRedhatModeConfigured() {
+        mojo.productizationModes = List.of("redhat");
+        assertTrue(mojo.isProductized("1.0.0.redhat-00001"));
+    }
+
+    @Test
+    void testIsProductized_ibmRejectedWhenOnlyRedhatModeConfigured() {
+        mojo.productizationModes = List.of("redhat");
+        assertFalse(mojo.isProductized("1.0.0-ibm-00002"));
+    }
+
+    @Test
+    void testIsProductized_bothModesConfigured() {
+        mojo.productizationModes = List.of("ibm", "redhat");
+        assertTrue(mojo.isProductized("1.0.0-ibm-00002"));
         assertTrue(mojo.isProductized("1.0.0.redhat-00001"));
     }
 
@@ -71,6 +102,16 @@ class VerifyMavenRepositoryMojoTest {
     @Test
     void testIsProductized_null() {
         assertFalse(mojo.isProductized(null));
+    }
+
+    @Test
+    void testExecute_failsOnUnknownProductizationMode() {
+        mojo.repositoryDirectory = tempDir.toFile();
+        mojo.productizationModes = List.of("acme");
+
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> mojo.execute());
+        assertTrue(e.getMessage().contains("acme"), e.getMessage());
     }
 
     // ========================================================================

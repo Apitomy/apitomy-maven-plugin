@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Both productization modes are configured, as a mixed repository would need during the
+    migration, so neither the IBM-suffixed nor the Red Hat-suffixed file is flagged.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.apitomy.it</groupId>
+    <artifactId>productization-modes-both</artifactId>
+    <version>1.0.0-ibm-00002</version>
+    <packaging>pom</packaging>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-maven-plugin</artifactId>
+                <version>@project.version@</version>
+                <executions>
+                    <execution>
+                        <id>verify-deps</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>verify-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <productizationModes>
+                                <productizationMode>ibm</productizationMode>
+                                <productizationMode>redhat</productizationMode>
+                            </productizationModes>
+                            <fileTypes>
+                                <fileType>txt</fileType>
+                            </fileTypes>
+                            <directories>
+                                <directory>${project.basedir}/lib</directory>
+                            </directories>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

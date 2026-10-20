@@ -10,7 +10,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.codehaus.plexus.util.SelectorUtils;
@@ -18,11 +17,13 @@ import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.graph.DependencyVisitor;
 
 /**
- * Base class for verification mojos that check whether Maven dependencies are productized
- * (have a {@code -redhat-} or {@code .redhat-} version suffix). Provides shared validation
- * logic, reporting, CSV output, and verbose logging utilities.
+ * Base class for verification mojos that check whether Maven dependencies are productized.
+ * Provides shared validation logic, reporting, CSV output, and verbose logging utilities.
+ *
+ * <p>Which version suffixes count as productized is controlled by
+ * {@code productizationModes}; see {@link ProductizationFlavor}.
  */
-public abstract class AbstractVerifyMojo extends AbstractMojo {
+public abstract class AbstractVerifyMojo extends AbstractProductizationMojo {
 
     /**
      * List of groupId:artifactId patterns for dependencies to ignore during validation.
@@ -31,13 +32,6 @@ public abstract class AbstractVerifyMojo extends AbstractMojo {
      */
     @Parameter(property = "ignoreGAVs")
     List<String> ignoreGAVs;
-
-    /**
-     * Enable verbose output for debugging. When enabled, provides detailed information about
-     * dependency tree resolution and validation results.
-     */
-    @Parameter(property = "verify.verbose", defaultValue = "false")
-    boolean verbose;
 
     /**
      * Optional path to a CSV output file. When set, a deduplicated flat list of all unproductized
@@ -214,19 +208,6 @@ public abstract class AbstractVerifyMojo extends AbstractMojo {
     }
 
     /**
-     * Checks whether a version string indicates a productized build.
-     *
-     * @param version the version string to check
-     * @return {@code true} if the version contains {@code -redhat-} or {@code .redhat-}
-     */
-    protected boolean isProductized(String version) {
-        if (version == null) {
-            return false;
-        }
-        return version.contains("-redhat-") || version.contains(".redhat-");
-    }
-
-    /**
      * Checks whether a dependency should be ignored based on the configured ignore patterns.
      *
      * @param groupId the dependency's groupId
@@ -294,17 +275,6 @@ public abstract class AbstractVerifyMojo extends AbstractMojo {
         }
         for (DependencyNode child : node.getChildren()) {
             appendTreeNode(sb, child, depth + 1);
-        }
-    }
-
-    /**
-     * Logs a message when verbose mode is enabled.
-     *
-     * @param message the message to log
-     */
-    protected void logVerbose(String message) {
-        if (verbose) {
-            getLog().info("[VERBOSE] " + message);
         }
     }
 

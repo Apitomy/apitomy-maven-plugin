@@ -3,7 +3,8 @@
 # Apitomy Maven Plugin
 
 A collection of Maven plugin goals used by Apitomy projects, primarily for validating that
-dependencies in productized (Red Hat) builds are properly aligned.
+dependencies in productized builds are properly aligned. Both IBM and Red Hat productization
+are supported; see [Productization Check](#productization-check).
 
 ### Goals Overview
 
@@ -60,8 +61,8 @@ input files after merging.
 ### `verify-dependencies` — Verify Files are Productized
 
 Scans directories and/or zip distributions for dependency files (e.g. JARs) and validates
-that their file names contain a productization suffix (`-redhat-` or `.redhat-`). This is a
-simple file-name-based check — it does not resolve Maven dependency trees.
+that their file names contain a productization suffix (`-ibm-` or `.ibm-` by default). This is
+a simple file-name-based check — it does not resolve Maven dependency trees.
 
 #### Configuration
 
@@ -102,6 +103,7 @@ simple file-name-based check — it does not resolve Maven dependency trees.
 | `directories` | No | — | List of directories to scan for dependency files. |
 | `distributions` | No | — | List of zip files to scan for dependency files. |
 | `ignoreFiles` | No | — | List of wildcard patterns for files to ignore. |
+| `productizationModes` | No | `ibm` | Productization flavours to accept: `ibm`, `redhat`. See [Productization Check](#productization-check). |
 | `verbose` | No | `false` | Enable verbose output (`-Dverify.verbose=true`). |
 
 ---
@@ -150,6 +152,7 @@ mvn io.apitomy:apitomy-maven-plugin:verify-maven-repository \
 | `artifactIncludes` | Yes | — | Comma-separated wildcard patterns to match artifact IDs to validate (e.g. `apitomy-*`). |
 | `artifactExcludes` | No | — | Comma-separated wildcard patterns to exclude artifact IDs from validation. |
 | `ignoreGAVs` | No | — | Comma-separated `groupId:artifactId` patterns for dependencies to skip (e.g. `io.apitomy:*`). |
+| `productizationModes` | No | `ibm` | Comma-separated productization flavours to accept: `ibm`, `redhat`. See [Productization Check](#productization-check). |
 | `verbose` | No | `false` | Enable verbose output (`-Dverify.verbose=true`). |
 | `outputCsv` | No | — | Path to write a CSV file of unproductized dependencies. |
 
@@ -199,6 +202,7 @@ Then run with: `mvn verify -Pproductized`
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `ignoreGAVs` | No | — | List of `groupId:artifactId` patterns for dependencies to skip. |
+| `productizationModes` | No | `ibm` | Productization flavours to accept: `ibm`, `redhat`. See [Productization Check](#productization-check). |
 | `verbose` | No | `false` | Enable verbose output (`-Dverify.verbose=true`). |
 | `outputCsv` | No | — | Path to write a CSV file of unproductized dependencies. |
 
@@ -217,7 +221,7 @@ Basic usage with Maven Central:
 
 ```bash
 mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
-    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
+    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-ibm-00002 \
     -DremoteRepositories=https://repo1.maven.org/maven2
 ```
 
@@ -225,7 +229,7 @@ With multiple remote repositories (using `id::url` format):
 
 ```bash
 mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
-    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
+    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-ibm-00002 \
     -DremoteRepositories=central::https://repo1.maven.org/maven2,jboss::https://repository.jboss.org/nexus/content/groups/public
 ```
 
@@ -233,7 +237,7 @@ With a local/offline repository (bypasses the `~/.m2` cache):
 
 ```bash
 mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
-    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
+    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-ibm-00002 \
     -DlocalRepository=/path/to/offline/maven-repository \
     -Dverify.verbose=true
 ```
@@ -242,17 +246,18 @@ With SSL verification disabled (for repos with self-signed certificates):
 
 ```bash
 mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
-    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
+    -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-ibm-00002 \
     -DremoteRepositories=https://my-internal-repo.example.com/maven2 \
     -Dinsecure=true
 ```
 
-Exemplar when running the tool to validate a dependency against Indy:
+Validating a legacy Red Hat-productized artifact against Indy, by selecting the `redhat` mode:
 
 ```bash
 rm -rf /tmp/empty-repo
-mvn io.apitomy:apitomy-maven-plugin:0.0.8:verify-artifact-dependencies \
+mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
     -Dartifact=io.apitomy:apitomy-registry-schema-resolver:3.1.6.redhat-00011 \
+    -DproductizationModes=redhat \
     -DremoteRepositories=https://indy.corp.redhat.com/api/content/maven/group/static \
     -DlocalRepository=/tmp/empty-repo \
     -Dinsecure=true \
@@ -268,6 +273,7 @@ mvn io.apitomy:apitomy-maven-plugin:0.0.8:verify-artifact-dependencies \
 | `localRepository` | No | — | Path to a local Maven repository directory (overrides `~/.m2/repository`). |
 | `insecure` | No | `false` | Disable SSL certificate verification (`-Dinsecure=true`). |
 | `ignoreGAVs` | No | — | Comma-separated `groupId:artifactId` patterns for dependencies to skip. |
+| `productizationModes` | No | `ibm` | Comma-separated productization flavours to accept: `ibm`, `redhat`. See [Productization Check](#productization-check). |
 | `verbose` | No | `false` | Enable verbose output (`-Dverify.verbose=true`). |
 | `outputCsv` | No | — | Path to write a CSV file of unproductized dependencies. |
 
@@ -277,12 +283,44 @@ mvn io.apitomy:apitomy-maven-plugin:0.0.8:verify-artifact-dependencies \
 
 #### Productization Check
 
-All verification goals check for Red Hat productization by looking for `-redhat-` or
-`.redhat-` in artifact versions. For example:
-- `3.0.0-redhat-00001` — productized
-- `2.15.0.redhat-00001` — productized
-- `3.0.0.Final` — **not** productized
-- `1.0.0-SNAPSHOT` — **not** productized
+All verification goals decide whether an artifact is productized by looking for a
+productization suffix in its version. Which suffixes count is controlled by the
+`productizationModes` parameter, which takes one or more flavours:
+
+| Mode | Accepted suffixes | Example |
+|------|-------------------|---------|
+| `ibm` (default) | `-ibm-`, `.ibm-` | `3.0.0-ibm-00002`, `2.15.0.ibm-00004` |
+| `redhat` | `-redhat-`, `.redhat-` | `3.0.0-redhat-00001`, `2.15.0.redhat-00001` |
+
+An artifact is productized if it matches **any** configured mode, so a version such as
+`3.0.0.Final` or `1.0.0-SNAPSHOT` is never productized.
+
+**The default is `ibm`.** Builds that still produce Red Hat-aligned artifacts must say so:
+
+```xml
+<configuration>
+    <productizationModes>
+        <productizationMode>redhat</productizationMode>
+    </productizationModes>
+</configuration>
+```
+
+```bash
+mvn ... -DproductizationModes=redhat
+```
+
+During the migration from Red Hat to IBM productization, configure both so a mixed
+repository validates cleanly:
+
+```bash
+mvn ... -DproductizationModes=ibm,redhat
+```
+
+An unrecognised mode fails the build with a message listing the valid values.
+
+> **Breaking change:** before 2.0.0 the check was hardcoded to the Red Hat suffixes. From
+> 2.0.0 the default is `ibm`, so existing Red Hat builds must configure
+> `productizationModes` explicitly.
 
 #### CSV Output
 

@@ -2,7 +2,8 @@
 
 The `verify-project-dependencies` and `verify-project-dependencies-report` goals work together
 to validate that all transitive dependencies in a multi-module Maven build are productized
-(have a `-redhat-` or `.redhat-` version suffix).
+(by default, have a `-ibm-` or `.ibm-` version suffix — see
+[Productization Check](README.md#productization-check)).
 
 ## How It Works
 
@@ -149,6 +150,7 @@ The collect goal inherits the following parameters from the base verification mo
 | Parameter | Property | Default | Description |
 |-----------|----------|---------|-------------|
 | `ignoreGAVs` | `ignoreGAVs` | (none) | List of `groupId:artifactId` patterns to ignore. Supports `*` wildcards. |
+| `productizationModes` | `productizationModes` | `ibm` | Productization flavours to accept: `ibm`, `redhat`. |
 | `verbose` | `verify.verbose` | `false` | Enable verbose dependency tree logging. |
 | `outputCsv` | `outputCsv` | (none) | Path to write a CSV report of unaligned dependencies (per-module). |
 

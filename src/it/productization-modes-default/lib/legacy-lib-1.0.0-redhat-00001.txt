@@ -1,0 +1,1 @@
+Stand-in for a Red Hat-productized artifact. Only the file name matters to verify-dependencies.
