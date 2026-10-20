@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The report goal is invoked without any module having run the collect goal, so nothing
+    was actually verified. The build must fail rather than passing silently.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.apitomy.it</groupId>
+    <artifactId>report-without-collect-results</artifactId>
+    <version>1.0.0-redhat-00001</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>mod-a</module>
+    </modules>
+
+    <build>
+        <plugins>
+            <!-- Declared so the command-line invocation resolves a version, but never bound. -->
+            <plugin>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-maven-plugin</artifactId>
+                <version>@project.version@</version>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

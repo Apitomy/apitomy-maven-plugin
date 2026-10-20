@@ -26,14 +26,27 @@ import org.apache.maven.project.MavenProject;
  * failures. This mojo reads JSON result files written by the
  * {@code verify-project-dependencies} goal and produces a consolidated report.
  *
- * <p>This mojo runs on every module but skips unless it is the last project in the
- * reactor, ensuring all collect results are available before reporting.
+ * <p>This mojo is an aggregator: Maven executes it once, during the execution root's own
+ * build. The execution root is the <em>first</em> project in the reactor, so binding this
+ * goal to a lifecycle phase makes it run before the modules it is meant to aggregate. It
+ * therefore verifies that every other reactor module has already been built and fails with
+ * an explanatory message if not, rather than reporting an all-clear on results that do not
+ * exist yet.
+ *
+ * <p>Invoke it from the command line, after the reactor has reached {@code package}:
+ * <pre>{@code
+ * mvn clean package io.apitomy:apitomy-maven-plugin:verify-project-dependencies-report
+ * }</pre>
+ *
+ * <p>See {@code USAGE.md} for the full workflow.
  *
  * @see VerifyProjectDependenciesCollectMojo
  */
 @Mojo(name = "verify-project-dependencies-report", defaultPhase = LifecyclePhase.VERIFY,
         aggregator = true, threadSafe = true)
 public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
+
+    static final String GOAL_NAME = "verify-project-dependencies-report";
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     MavenProject project;
@@ -51,13 +64,23 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
             return;
         }
 
+        failIfReactorIncomplete();
+
         try {
             List<ModuleReport> allResults = readAllResults();
 
             if (allResults.isEmpty()) {
-                getLog().info("No dependency verification results found.");
-                return;
+                throw new MojoFailureException("No dependency verification results found,"
+                        + " so nothing was verified."
+                        + "\n\nThe '" + GOAL_NAME + "' goal aggregates the results written"
+                        + " by the 'verify-project-dependencies' goal. Configure that goal"
+                        + " in the modules you want verified, and make sure the build"
+                        + " reached the 'package' phase before this goal ran."
+                        + "\n\nSee USAGE.md for the full workflow.");
             }
+
+            getLog().info("Aggregating dependency verification results from "
+                    + allResults.size() + " module(s).");
 
             List<ModuleReport> failedModules = new ArrayList<>();
             for (ModuleReport report : allResults) {
@@ -90,6 +113,43 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
             throw new MojoExecutionException(
                     "Error reading dependency verification results", e);
         }
+    }
+
+    /**
+     * Fails the build if any other reactor module has not finished building yet.
+     *
+     * <p>As an aggregator, this mojo executes during the execution root's own lifecycle, and
+     * the execution root is the <em>first</em> project in the reactor. Bound to a lifecycle
+     * phase it therefore runs before the modules it is meant to aggregate, finds no results,
+     * and reports an all-clear that means nothing. Rather than reporting on an incomplete
+     * reactor, fail and explain how to invoke the goal correctly.
+     *
+     * @throws MojoFailureException if any other reactor module has not been built yet
+     */
+    void failIfReactorIncomplete() throws MojoFailureException {
+        List<String> pendingModules = new ArrayList<>();
+        for (MavenProject reactorProject : session.getProjects()) {
+            if (reactorProject == project) {
+                continue;
+            }
+            if (session.getResult().getBuildSummary(reactorProject) == null) {
+                pendingModules.add(reactorProject.getArtifactId());
+            }
+        }
+
+        if (pendingModules.isEmpty()) {
+            return;
+        }
+
+        throw new MojoFailureException("The '" + GOAL_NAME + "' goal ran before "
+                + pendingModules.size() + " reactor module(s) had been built: "
+                + String.join(", ", pendingModules) + "."
+                + "\n\nThis goal is an aggregator, so it runs during the execution root's"
+                + " own build, which happens first in the reactor. Aggregating at that"
+                + " point would report on results that do not exist yet."
+                + "\n\nInvoke it from the command line after the modules have been built:"
+                + "\n    mvn clean package io.apitomy:apitomy-maven-plugin:" + GOAL_NAME
+                + "\n\nSee USAGE.md for the full workflow.");
     }
 
     /**
