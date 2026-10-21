@@ -3,6 +3,8 @@ package io.apitomy.common.apps.maven;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -152,17 +154,15 @@ public class VerifyArtifactDependenciesMojo extends AbstractVerifyMojo {
             logVerboseDependencyTree(result.getRoot());
 
             // Walk the dependency tree and check each dependency's version.
-            Set<String> unproductizedDependencies = new TreeSet<>();
-            Set<String> unproductizedGavs = new TreeSet<>();
-            validateDependencyTree(result.getRoot(), artifactGav,
-                    unproductizedDependencies, unproductizedGavs);
+            Map<String, UnalignedDependency> unalignedByGav = new TreeMap<>();
+            collectUnalignedDependencies(result.getRoot(), artifactGav, unalignedByGav);
 
             // Write CSV report (before reportResults, which may throw).
-            writeCsvReport(unproductizedGavs);
+            writeCsvReport(unalignedByGav.values());
 
             // Report results.
             getLog().info("=== Artifact Dependency Verification Results ===");
-            reportResults(unproductizedDependencies, resolutionErrors);
+            reportResults(unalignedByGav.values(), resolutionErrors);
 
         } catch (MojoFailureException e) {
             throw e;

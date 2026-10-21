@@ -5,12 +5,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.Set;
-import java.util.TreeSet;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -30,8 +29,6 @@ import org.eclipse.aether.collection.CollectRequest;
 import org.eclipse.aether.collection.CollectResult;
 import org.eclipse.aether.collection.DependencyCollectionException;
 import org.eclipse.aether.graph.Dependency;
-import org.eclipse.aether.graph.DependencyNode;
-import org.eclipse.aether.graph.DependencyVisitor;
 import org.eclipse.aether.repository.RemoteRepository;
 
 /**
@@ -137,17 +134,15 @@ public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
                 }
             }
 
-            Set<String> unproductizedDependencies = new TreeSet<>();
-            Set<String> unproductizedGavs = new TreeSet<>();
-            List<UnalignedDependency> unalignedDeps = new ArrayList<>();
+            Map<String, UnalignedDependency> unalignedByGav = new TreeMap<>();
 
             if (result.getRoot() != null) {
                 logVerboseDependencyTree(result.getRoot());
-                collectUnalignedDependencies(result.getRoot(), projectGav,
-                        unproductizedDependencies, unproductizedGavs, unalignedDeps);
+                collectUnalignedDependencies(result.getRoot(), projectGav, unalignedByGav);
             }
 
-            writeCsvReport(unproductizedGavs);
+            List<UnalignedDependency> unalignedDeps = new ArrayList<>(unalignedByGav.values());
+            writeCsvReport(unalignedDeps);
 
             getLog().info("=== Project Dependency Verification Results ===");
             getLog().info("  Unaligned dependencies: " + unalignedDeps.size());
@@ -170,54 +165,7 @@ public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
         }
     }
 
-    /**
-     * Walks a dependency tree and collects unaligned dependencies as structured objects.
-     */
-    void collectUnalignedDependencies(DependencyNode root, String artifactGav,
-            Set<String> unproductizedDependencies, Set<String> unproductizedGavs,
-            List<UnalignedDependency> unalignedDeps) {
-        Deque<DependencyNode> path = new ArrayDeque<>();
-        root.accept(new DependencyVisitor() {
-            @Override
-            public boolean visitEnter(DependencyNode node) {
-                path.push(node);
-                if (node == root) {
-                    return true;
-                }
-                if (node.getDependency() == null || node.getArtifact() == null) {
-                    return true;
-                }
-
-                String depGroupId = node.getArtifact().getGroupId();
-                String depArtifactId = node.getArtifact().getArtifactId();
-                String depVersion = node.getArtifact().getVersion();
-
-                if (isIgnored(depGroupId, depArtifactId)) {
-                    logVerbose("Ignoring dependency: " + depGroupId + ":"
-                            + depArtifactId + " in tree of " + artifactGav);
-                    return true;
-                }
-
-                if (!isProductized(depVersion)) {
-                    String hierarchyMsg = buildHierarchyMessage(path);
-                    unproductizedDependencies.add(hierarchyMsg);
-                    unproductizedGavs.add(depGroupId + ":" + depArtifactId + ":"
-                            + depVersion);
-                    unalignedDeps.add(new UnalignedDependency(
-                            depGroupId, depArtifactId, depVersion, hierarchyMsg));
-                }
-                return true;
-            }
-
-            @Override
-            public boolean visitLeave(DependencyNode node) {
-                path.pop();
-                return true;
-            }
-        });
-    }
-
-    /**
+        /**
      * Writes the module verification results to a JSON file under the module's own
      * target directory.
      *

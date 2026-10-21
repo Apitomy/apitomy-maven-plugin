@@ -5,10 +5,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -47,13 +51,17 @@ public abstract class AbstractVerifyMojo extends AbstractProductizationMojo {
      * unproductized dependency is found, the full dependency path from the root down to the
      * unproductized dependency is included in the output.
      *
+     * <p>A dependency that several paths lead to is one problem, not one per path, so results
+     * are keyed by {@code groupId:artifactId:version}. The shortest path to each is kept as its
+     * representative, since that is the one most useful for deciding what to change. The map
+     * can be carried across several trees to accumulate results for a whole repository.
+     *
      * @param root the root node of the dependency tree
-     * @param artifactGav the GAV of the artifact being checked (for error messages)
-     * @param unproductizedDependencies the set to add hierarchy violation messages to
-     * @param unproductizedGavs the set to add flat groupId:artifactId:version strings to
+     * @param artifactGav the GAV of the artifact being checked (for log messages)
+     * @param unalignedByGav the map, keyed by GAV, to record unaligned dependencies in
      */
-    protected void validateDependencyTree(DependencyNode root, String artifactGav,
-            Set<String> unproductizedDependencies, Set<String> unproductizedGavs) {
+    protected void collectUnalignedDependencies(DependencyNode root, String artifactGav,
+            Map<String, UnalignedDependency> unalignedByGav) {
         Deque<DependencyNode> path = new ArrayDeque<>();
         root.accept(new DependencyVisitor() {
             @Override
@@ -81,11 +89,9 @@ public abstract class AbstractVerifyMojo extends AbstractProductizationMojo {
                 }
 
                 if (!isProductized(depVersion)) {
-                    String hierarchyMsg = buildHierarchyMessage(path);
-                    unproductizedDependencies.add(hierarchyMsg);
-                    unproductizedGavs.add(depGroupId + ":" + depArtifactId + ":" + depVersion);
-                    logVerbose("Unproductized dependency: " + depGroupId + ":" + depArtifactId
-                            + ":" + depVersion + " (" + depScope + ")");
+                    String gav = depGroupId + ":" + depArtifactId + ":" + depVersion;
+                    record(unalignedByGav, gav, depGroupId, depArtifactId, depVersion, path);
+                    logVerbose("Unaligned dependency: " + gav + " (" + depScope + ")");
                 }
 
                 return true;
@@ -97,6 +103,30 @@ public abstract class AbstractVerifyMojo extends AbstractProductizationMojo {
                 return true;
             }
         });
+    }
+
+    /**
+     * Records an unaligned dependency, keeping the shortest known path to it.
+     *
+     * @param unalignedByGav the map to record in
+     * @param gav the dependency's groupId:artifactId:version
+     * @param groupId the dependency's groupId
+     * @param artifactId the dependency's artifactId
+     * @param version the dependency's version
+     * @param path the current path from the root down to the dependency
+     */
+    private void record(Map<String, UnalignedDependency> unalignedByGav, String gav,
+            String groupId, String artifactId, String version, Deque<DependencyNode> path) {
+
+        UnalignedDependency existing = unalignedByGav.get(gav);
+        if (existing != null && existing.getDepth() <= path.size()) {
+            return;
+        }
+
+        UnalignedDependency dependency = new UnalignedDependency(groupId, artifactId, version,
+                buildHierarchyMessage(path));
+        dependency.setDepth(path.size());
+        unalignedByGav.put(gav, dependency);
     }
 
     /**
@@ -138,17 +168,20 @@ public abstract class AbstractVerifyMojo extends AbstractProductizationMojo {
      * Reports the validation results and throws a {@link MojoFailureException} if any violations
      * or resolution errors were found.
      *
-     * @param unproductizedDependencies the set of unproductized dependency descriptions
+     * <p>The count reported is the number of distinct unaligned dependencies, each shown with
+     * one representative dependency path.
+     *
+     * @param unalignedDependencies the distinct unaligned dependencies
      * @param resolutionErrors the set of dependency resolution error descriptions
      * @throws MojoFailureException if any violations or errors were found
      */
-    protected void reportResults(Set<String> unproductizedDependencies,
+    protected void reportResults(Collection<UnalignedDependency> unalignedDependencies,
             Set<String> resolutionErrors) throws MojoFailureException {
 
-        getLog().info("  Unproductized dependencies: " + unproductizedDependencies.size());
-        getLog().info("  Resolution errors:          " + resolutionErrors.size());
+        getLog().info("  Unaligned dependencies: " + unalignedDependencies.size());
+        getLog().info("  Resolution errors:      " + resolutionErrors.size());
 
-        boolean hasFailures = !unproductizedDependencies.isEmpty()
+        boolean hasFailures = !unalignedDependencies.isEmpty()
                 || !resolutionErrors.isEmpty();
 
         if (!hasFailures) {
@@ -158,11 +191,13 @@ public abstract class AbstractVerifyMojo extends AbstractProductizationMojo {
 
         StringBuilder failureMessage = new StringBuilder();
 
-        if (!unproductizedDependencies.isEmpty()) {
-            failureMessage.append("\nUnproductized dependencies:\n");
-            for (String dep : unproductizedDependencies) {
+        if (!unalignedDependencies.isEmpty()) {
+            failureMessage.append("\nUnaligned dependencies (")
+                    .append(unalignedDependencies.size())
+                    .append("), each shown with its shortest dependency path:\n");
+            for (UnalignedDependency dep : unalignedDependencies) {
                 failureMessage.append("    ")
-                        .append(dep.replace("\n", "\n    "))
+                        .append(dep.getHierarchy().replace("\n", "\n    "))
                         .append("\n\n");
             }
         }
@@ -182,13 +217,19 @@ public abstract class AbstractVerifyMojo extends AbstractProductizationMojo {
      * sorted by groupId:artifactId:version. Only writes the file if {@link #outputCsv} is
      * configured and there are unproductized dependencies to report.
      *
-     * @param unproductizedGavs the deduplicated set of groupId:artifactId:version strings
+     * @param unalignedDependencies the distinct unaligned dependencies
      * @throws IOException if the file cannot be written
      */
-    protected void writeCsvReport(Set<String> unproductizedGavs) throws IOException {
-        if (outputCsv == null || unproductizedGavs.isEmpty()) {
+    protected void writeCsvReport(Collection<UnalignedDependency> unalignedDependencies)
+            throws IOException {
+        if (outputCsv == null || unalignedDependencies.isEmpty()) {
             return;
         }
+
+        Set<String> unproductizedGavs = unalignedDependencies.stream()
+                .map(dep -> dep.getGroupId() + ":" + dep.getArtifactId() + ":"
+                        + dep.getVersion())
+                .collect(Collectors.toCollection(TreeSet::new));
 
         Path csvPath = outputCsv.toPath();
         if (csvPath.getParent() != null) {

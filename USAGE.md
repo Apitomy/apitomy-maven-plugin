@@ -236,6 +236,11 @@ Each module that runs the collect goal logs its results during the `package` pha
     -> com.example:unaligned-lib:1.0 (compile)
 ```
 
+Counts are of distinct dependencies, not of routes through the dependency graph. A dependency that
+several paths lead to is one problem and is reported once, shown with the shortest path that reaches
+it — the one that usually points at what to change. The per-module count, the aggregate count and the
+CSV therefore all agree.
+
 It also writes a JSON results file to `target/verify-project-dependencies/results.json`:
 
 ```json
