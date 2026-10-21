@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Date;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,12 +47,15 @@ class VerifyProjectDependenciesReportMojoTest {
     @TempDir
     Path tempDir;
 
+    private static final Date BUILD_START = new Date(1_700_000_000_000L);
+
     @BeforeEach
     void setUp() {
         mojo = new VerifyProjectDependenciesReportMojo();
         mojo.setLog(mockLog);
         mojo.session = session;
         lenient().when(session.getResult()).thenReturn(executionResult);
+        lenient().when(session.getStartTime()).thenReturn(BUILD_START);
     }
 
     // ========================================================================
@@ -132,6 +136,72 @@ class VerifyProjectDependenciesReportMojoTest {
                 "Failure should list the unaligned GAV: " + e.getMessage());
     }
 
+    // ========================================================================
+    // Stale results tests
+    // ========================================================================
+
+    @Test
+    void testExecute_failsWhenOnlyStaleResultsExist() throws Exception {
+        MavenProject root = createProject("root", true);
+        MavenProject modA = createProject("mod-a", false);
+        mojo.project = root;
+
+        when(session.getProjects()).thenReturn(List.of(root, modA));
+        markBuilt(root);
+        markBuilt(modA);
+        writeResults(modA, new ModuleReport("amp.test", "mod-a", "1.0.0"),
+                "a-previous-build");
+
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> mojo.execute());
+        assertTrue(e.getMessage().contains("No dependency verification results"),
+                "Results from another build must not count as this build's verdict: "
+                        + e.getMessage());
+    }
+
+    @Test
+    void testExecute_ignoresStaleFailuresFromAPreviousBuild() throws Exception {
+        MavenProject root = createProject("root", true);
+        MavenProject modA = createProject("mod-a", false);
+        MavenProject modB = createProject("mod-b", false);
+        mojo.project = root;
+
+        when(session.getProjects()).thenReturn(List.of(root, modA, modB));
+        markBuilt(root);
+        markBuilt(modA);
+        markBuilt(modB);
+
+        // mod-a was fixed and rebuilt this time; mod-b still holds last build's violations.
+        writeResults(modA, new ModuleReport("amp.test", "mod-a", "1.0.0"), currentBuildId());
+        ModuleReport staleReport = new ModuleReport("amp.test", "mod-b", "1.0.0");
+        staleReport.setUnalignedDependencies(List.of(new UnalignedDependency(
+                "com.example", "already-fixed", "1.0", "hierarchy")));
+        writeResults(modB, staleReport, "a-previous-build");
+
+        assertDoesNotThrow(() -> mojo.execute(),
+                "A violation from a previous build must not fail this one");
+    }
+
+    @Test
+    void testExecute_usesResultsFromTheCurrentBuild() throws Exception {
+        MavenProject root = createProject("root", true);
+        MavenProject modA = createProject("mod-a", false);
+        mojo.project = root;
+
+        when(session.getProjects()).thenReturn(List.of(root, modA));
+        markBuilt(root);
+        markBuilt(modA);
+
+        ModuleReport report = new ModuleReport("amp.test", "mod-a", "1.0.0");
+        report.setUnalignedDependencies(List.of(new UnalignedDependency(
+                "com.example", "unaligned-lib", "1.0", "hierarchy")));
+        writeResults(modA, report, currentBuildId());
+
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> mojo.execute());
+        assertTrue(e.getMessage().contains("com.example:unaligned-lib:1.0"), e.getMessage());
+    }
+
     @Test
     void testExecute_skipsSilentlyWhenNotExecutionRoot() {
         MavenProject modA = createProject("mod-a", false);
@@ -161,11 +231,21 @@ class VerifyProjectDependenciesReportMojoTest {
 
     private void writeResults(MavenProject project, ModuleReport report)
             throws IOException {
+        writeResults(project, report, currentBuildId());
+    }
+
+    private void writeResults(MavenProject project, ModuleReport report, String buildId)
+            throws IOException {
         Path dir = Path.of(project.getBuild().getDirectory(),
                 VerifyProjectDependenciesCollectMojo.RESULTS_DIR);
         Files.createDirectories(dir);
-        new ObjectMapper().writeValue(dir.resolve("results.json").toFile(),
-                new VerifyResultsFile(report));
+        VerifyResultsFile resultsFile = new VerifyResultsFile(report);
+        resultsFile.setBuildId(buildId);
+        new ObjectMapper().writeValue(dir.resolve("results.json").toFile(), resultsFile);
+    }
+
+    private String currentBuildId() {
+        return String.valueOf(BUILD_START.getTime());
     }
 
 }

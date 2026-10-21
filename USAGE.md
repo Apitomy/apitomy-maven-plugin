@@ -149,6 +149,17 @@ never actually verified. The report goal therefore fails rather than staying qui
 - **No module produced results.** If no `results.json` is found anywhere in the reactor, nothing was
   verified, and the goal fails pointing at the `verify-project-dependencies` configuration.
 
+It also ignores results that are not from the current build. Each `results.json` is stamped with the
+Maven invocation that wrote it, and results files survive in `target` across builds, so a module that
+did not run the collect goal this time — deselected with `-pl`, skipped by a profile, or simply not
+rebuilt without `clean` — would otherwise contribute a stale verdict in either direction: violations
+that have since been fixed, or a clean result standing in for a module nobody checked. Leftovers are
+skipped with a warning naming the modules, and the report logs which modules it did verify.
+
+This is why both goals belong in **one** Maven invocation, as shown above. Running `mvn package` and
+then a separate `mvn ...:verify-project-dependencies-report` leaves the report with nothing it can
+attribute to its own build, and it fails rather than trusting the previous run's files.
+
 ## Configuration Options
 
 The collect goal inherits the following parameters from the base verification mojo:
