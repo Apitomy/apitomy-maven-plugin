@@ -3,7 +3,11 @@
 Notable changes to the Apitomy Maven Plugin. Releases before 1.5.0 are described by the
 auto-generated notes on the [releases page](https://github.com/Apitomy/apitomy-maven-plugin/releases).
 
-## 1.5.0 (unreleased)
+## Unreleased
+
+Nothing yet.
+
+## [1.5.0](https://github.com/Apitomy/apitomy-maven-plugin/releases/tag/1.5.0) — 2026-10-21
 
 ### Upgrade notes
 
