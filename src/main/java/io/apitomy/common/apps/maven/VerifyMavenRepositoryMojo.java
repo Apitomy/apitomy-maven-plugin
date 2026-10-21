@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -229,8 +231,7 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
                     session, new LocalRepository(tempLocalRepo.toFile())));
 
             // Phase 4: For each matching artifact, resolve the dependency tree and validate.
-            Set<String> unproductizedDependencies = new TreeSet<>();
-            Set<String> unproductizedGavs = new TreeSet<>();
+            Map<String, UnalignedDependency> unalignedByGav = new TreeMap<>();
             Set<String> resolutionErrors = new TreeSet<>();
             int artifactsChecked = 0;
 
@@ -256,18 +257,18 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
                 // Walk the dependency tree and check each dependency's version.
                 if (result.getRoot() != null) {
                     logVerboseDependencyTree(result.getRoot());
-                    validateDependencyTree(result.getRoot(), coords.gav(),
-                            unproductizedDependencies, unproductizedGavs);
+                    collectUnalignedDependencies(result.getRoot(), coords.gav(),
+                            unalignedByGav);
                 }
             }
 
             // Phase 5: Write CSV report (before reportResults, which may throw).
-            writeCsvReport(unproductizedGavs);
+            writeCsvReport(unalignedByGav.values());
 
             // Phase 6: Report results.
             getLog().info("=== Maven Repository Verification Results ===");
             getLog().info("  Artifacts checked:          " + artifactsChecked);
-            reportResults(unproductizedDependencies, resolutionErrors);
+            reportResults(unalignedByGav.values(), resolutionErrors);
 
         } catch (MojoFailureException e) {
             throw e;

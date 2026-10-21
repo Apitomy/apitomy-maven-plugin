@@ -1,7 +1,12 @@
 package io.apitomy.common.apps.maven;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 /**
  * Represents a single unaligned (unproductized) dependency found during verification.
+ *
+ * <p>{@code hierarchy} shows one representative path from the artifact being checked down to
+ * this dependency — the shortest one found, since a dependency can be reachable by many.
  */
 public class UnalignedDependency {
 
@@ -9,6 +14,13 @@ public class UnalignedDependency {
     private String artifactId;
     private String version;
     private String hierarchy;
+
+    /**
+     * Length of the recorded path, used to keep the shortest one while collecting. Not part of
+     * the serialized results file.
+     */
+    @JsonIgnore
+    private int depth;
 
     public UnalignedDependency() {
     }
@@ -51,6 +63,18 @@ public class UnalignedDependency {
 
     public void setHierarchy(String hierarchy) {
         this.hierarchy = hierarchy;
+    }
+
+    /**
+     * @return the length of the recorded dependency path
+     */
+    @JsonIgnore
+    public int getDepth() {
+        return depth;
+    }
+
+    public void setDepth(int depth) {
+        this.depth = depth;
     }
 
 }
