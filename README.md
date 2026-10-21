@@ -13,7 +13,8 @@ are supported; see [Productization Check](#productization-check).
 | `merge` | Merges multiple Java `.properties` files into a single output file. |
 | `verify-dependencies` | Validates that files (JARs, etc.) in directories or zip distributions are productized. |
 | `verify-maven-repository` | Validates an offline Maven repository by resolving full dependency trees. |
-| `verify-project-dependencies` | Validates that all dependencies of the current Maven project are productized. |
+| `verify-project-dependencies` | Collects and checks all dependencies of the current Maven project, writing the result to a file. Reports warnings only — it never fails the build. |
+| `verify-project-dependencies-report` | Aggregates the results written by `verify-project-dependencies` across the reactor and **fails the build** if anything is unaligned. |
 | `verify-artifact-dependencies` | Validates that all dependencies of a single Maven artifact are productized. |
 
 ---
@@ -173,11 +174,18 @@ mvn io.apitomy:apitomy-maven-plugin:verify-maven-repository \
 
 ---
 
-### `verify-project-dependencies` — Verify Current Project Dependencies
+### `verify-project-dependencies` — Collect Current Project Dependencies
 
-Validates that all compile and runtime scoped transitive dependencies of the current Maven
-project are productized. This mojo is designed to be bound to the `verify` phase and
-activated via a Maven profile during productized builds.
+Checks that all compile and runtime scoped transitive dependencies of the current Maven
+project are productized. Bound to the `package` phase by default, and typically activated via
+a Maven profile during productized builds.
+
+> **This goal never fails the build.** It logs warnings and writes its findings to
+> `target/verify-project-dependencies/results.json`, leaving the pass/fail decision to
+> [`verify-project-dependencies-report`](#verify-project-dependencies-report--report-on-collected-dependencies),
+> which aggregates those files across the whole reactor. Configuring this goal on its own
+> gives you warnings in the log and a green build. See [USAGE.md](USAGE.md) for the complete
+> two-goal workflow.
 
 #### Configuration
 
@@ -212,7 +220,13 @@ activated via a Maven profile during productized builds.
 </profile>
 ```
 
-Then run with: `mvn verify -Pproductized`
+Then run the build far enough to reach the `package` phase, and invoke the report goal to get
+a pass/fail verdict:
+
+```bash
+mvn clean package -Pproductized \
+    io.apitomy:apitomy-maven-plugin:verify-project-dependencies-report
+```
 
 #### Parameters
 
@@ -221,7 +235,43 @@ Then run with: `mvn verify -Pproductized`
 | `ignoreGAVs` | No | — | List of `groupId:artifactId` patterns for dependencies to skip. |
 | `productizationModes` | No | `ibm` | Productization flavours to accept: `ibm`, `redhat`. See [Productization Check](#productization-check). |
 | `verbose` | No | `false` | Enable verbose output (`-Dverify.verbose=true`). |
-| `outputCsv` | No | — | Path to write a CSV file of unproductized dependencies. |
+| `outputCsv` | No | — | Path to write a CSV file of unproductized dependencies (per-module). |
+
+---
+
+### `verify-project-dependencies-report` — Report on Collected Dependencies
+
+Aggregates the `results.json` files written by
+[`verify-project-dependencies`](#verify-project-dependencies--collect-current-project-dependencies)
+across every reactor module, and **fails the build** if any module has unaligned dependencies.
+This is the goal that turns the collected findings into a verdict.
+
+#### Command Line Usage
+
+Run it after the reactor has been packaged, using its fully qualified goal name:
+
+```bash
+mvn clean package \
+    io.apitomy:apitomy-maven-plugin:verify-project-dependencies-report
+```
+
+If the collect goal is configured inside a profile, activate that profile too (e.g.
+`-Pproductized`).
+
+#### Do Not Bind It in `<executions>`
+
+This goal is an aggregator, so Maven runs it during the execution root's own build — and the
+execution root is built *first*. Bound to a lifecycle phase it would run before the modules it
+is meant to aggregate, so it would see no results. Rather than report an all-clear that means
+nothing, the goal detects this and fails, naming the modules that had not been built yet.
+
+It also fails when it finds no results at all, since that means nothing was verified.
+
+#### Output
+
+A consolidated, de-duplicated summary of every unaligned dependency across the reactor, plus
+an `unaligned-dependencies.csv` in the root project's `target` directory. See
+[USAGE.md](USAGE.md) for sample output and the full workflow.
 
 ---
 
