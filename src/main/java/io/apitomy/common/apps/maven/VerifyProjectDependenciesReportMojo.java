@@ -90,12 +90,6 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
                 }
             }
 
-            if (failedModules.isEmpty()) {
-                getLog().info("All dependencies in all reactor modules are properly "
-                        + "productized.");
-                return;
-            }
-
             // De-duplicate and sort the unaligned dependencies across all modules.
             Set<String> allGavs = new TreeSet<>();
             for (ModuleReport module : failedModules) {
@@ -105,7 +99,16 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
                 }
             }
 
+            // Written on every run, so that a clean result replaces an earlier report
+            // rather than leaving its violations on disk.
             writeCsvReport(allGavs);
+
+            if (failedModules.isEmpty()) {
+                getLog().info("All dependencies in all reactor modules are properly "
+                        + "productized.");
+                return;
+            }
+
             reportAggregateFailures(failedModules, allGavs);
 
         } catch (MojoFailureException e) {
@@ -306,14 +309,13 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
      * Writes a CSV file listing all unaligned GAVs to the root project's target directory.
      * The file contains columns {@code groupId}, {@code artifactId}, and {@code version}.
      *
+     * <p>Written on every run, with the header row alone when the reactor is clean, so that a
+     * report left by an earlier run cannot be mistaken for the current one.
+     *
      * @param allGavs the de-duplicated, sorted set of unaligned GAV strings
      * @throws IOException if the file cannot be written
      */
     void writeCsvReport(Set<String> allGavs) throws IOException {
-        if (allGavs.isEmpty()) {
-            return;
-        }
-
         Path targetDir = Paths.get(project.getBuild().getDirectory());
         Files.createDirectories(targetDir);
         Path csvPath = targetDir.resolve("unaligned-dependencies.csv");

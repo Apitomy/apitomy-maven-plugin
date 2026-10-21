@@ -213,16 +213,20 @@ public abstract class AbstractVerifyMojo extends AbstractProductizationMojo {
     }
 
     /**
-     * Writes a CSV file containing the deduplicated list of unproductized dependencies,
-     * sorted by groupId:artifactId:version. Only writes the file if {@link #outputCsv} is
-     * configured and there are unproductized dependencies to report.
+     * Writes a CSV file listing the unaligned dependencies, sorted by
+     * groupId:artifactId:version, whenever {@link #outputCsv} is configured.
+     *
+     * <p>A run that finds nothing still writes the file, with the header row alone. Skipping
+     * it would leave the previous run's violations on disk, which is exactly the run where a
+     * consumer of the file — a CI step, a release checklist — would be misled, and leaves no
+     * way to tell "verified clean" from "never verified".
      *
      * @param unalignedDependencies the distinct unaligned dependencies
      * @throws IOException if the file cannot be written
      */
     protected void writeCsvReport(Collection<UnalignedDependency> unalignedDependencies)
             throws IOException {
-        if (outputCsv == null || unalignedDependencies.isEmpty()) {
+        if (outputCsv == null) {
             return;
         }
 

@@ -396,6 +396,12 @@ The `verify-maven-repository`, `verify-project-dependencies`, and
 dependencies. The CSV has three columns (`groupId`, `artifactId`, `version`) and is
 deduplicated and sorted.
 
+Whenever `outputCsv` is configured the file is written, even by a run that finds nothing — in
+which case it holds the header row alone. A clean run therefore replaces an earlier report
+instead of leaving its violations on disk, so the file always describes the run that just
+happened. The same applies to the `unaligned-dependencies.csv` written by
+`verify-project-dependencies-report`.
+
 #### Verbose Mode
 
 All verification goals support verbose output via `-Dverify.verbose=true`. When enabled,
