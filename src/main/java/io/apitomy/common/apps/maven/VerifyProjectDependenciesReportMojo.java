@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -153,32 +154,122 @@ public class VerifyProjectDependenciesReportMojo extends AbstractMojo {
     }
 
     /**
-     * Reads all JSON result files from each reactor module's build directory.
+     * Reads the JSON result files written by this build from each reactor module's build
+     * directory.
+     *
+     * <p>Results files live in {@code target} and survive across builds, so a module that did
+     * not run the collect goal this time — because it was deselected with {@code -pl}, skipped
+     * by a profile, or simply not rebuilt without {@code clean} — can still have a file on disk
+     * from a previous run. Counting those would either resurrect violations that have since
+     * been fixed or pass off an old clean verdict as a current one, so files stamped with a
+     * different build are ignored and reported.
+     *
+     * @return the module reports produced by this build
+     * @throws IOException if a results file cannot be read
      */
     List<ModuleReport> readAllResults() throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         List<ModuleReport> results = new ArrayList<>();
+        List<String> staleModules = new ArrayList<>();
+        List<String> modulesWithoutResults = new ArrayList<>();
+        String currentBuildId = currentBuildId();
 
         for (MavenProject reactorProject : session.getProjects()) {
             Path dir = Paths.get(reactorProject.getBuild().getDirectory(),
                     VerifyProjectDependenciesCollectMojo.RESULTS_DIR);
             if (!Files.isDirectory(dir)) {
+                modulesWithoutResults.add(reactorProject.getArtifactId());
                 continue;
             }
 
+            boolean contributed = false;
             try (Stream<Path> files = Files.list(dir)) {
                 for (Path file : (Iterable<Path>) files.filter(
                         p -> p.toString().endsWith(".json"))::iterator) {
                     VerifyResultsFile resultsFile = mapper.readValue(
                             file.toFile(), VerifyResultsFile.class);
-                    if (resultsFile.getModule() != null) {
+                    if (resultsFile.getModule() == null) {
+                        continue;
+                    }
+                    if (isFromThisBuild(resultsFile, currentBuildId)) {
                         results.add(resultsFile.getModule());
+                        contributed = true;
+                    } else {
+                        staleModules.add(reactorProject.getArtifactId());
+                        getLog().debug("Ignoring results from another build: " + file);
                     }
                 }
             }
+            if (!contributed) {
+                modulesWithoutResults.add(reactorProject.getArtifactId());
+            }
         }
 
+        reportContributions(results, staleModules, modulesWithoutResults);
         return results;
+    }
+
+    /**
+     * Logs which modules contributed to this report, and which did not.
+     *
+     * @param results the reports gathered from this build
+     * @param staleModules modules whose results came from another build
+     * @param modulesWithoutResults modules that produced no results for this build
+     */
+    private void reportContributions(List<ModuleReport> results, List<String> staleModules,
+            List<String> modulesWithoutResults) {
+
+        if (!results.isEmpty()) {
+            getLog().info("Modules verified in this build: " + results.stream()
+                    .map(ModuleReport::getArtifactId)
+                    .collect(Collectors.joining(", ")));
+        }
+        if (!staleModules.isEmpty()) {
+            getLog().warn("Ignored results left over from a previous build in: "
+                    + String.join(", ", staleModules)
+                    + ". Those modules did not run '"
+                    + VerifyProjectDependenciesCollectMojo.GOAL_NAME
+                    + "' in this build, so their findings are not current.");
+        }
+        if (!modulesWithoutResults.isEmpty()) {
+            getLog().warn("No dependency verification results for: "
+                    + String.join(", ", modulesWithoutResults)
+                    + ". Those modules were not verified.");
+        }
+    }
+
+    /**
+     * Checks whether a results file was written by the build that is now reporting. A file
+     * without a build identifier predates them, so it cannot be attributed to this build.
+     *
+     * @param resultsFile the results file to check
+     * @param currentBuildId the identifier of the current build, or {@code null} if unknown
+     * @return {@code true} if the file belongs to this build
+     */
+    private boolean isFromThisBuild(VerifyResultsFile resultsFile, String currentBuildId) {
+        if (currentBuildId == null) {
+            // The build identifier could not be determined, so staleness cannot be judged.
+            return true;
+        }
+        return currentBuildId.equals(resultsFile.getBuildId());
+    }
+
+    /**
+     * @return an identifier for the current Maven invocation, or {@code null} if unavailable
+     */
+    private String currentBuildId() {
+        return buildIdOf(session);
+    }
+
+    /**
+     * Derives a build identifier shared by every module of a single Maven invocation.
+     *
+     * @param session the Maven session
+     * @return the identifier, or {@code null} if the session has no start time
+     */
+    static String buildIdOf(MavenSession session) {
+        return session.getStartTime() == null ? null
+                : String.valueOf(session.getStartTime().getTime());
     }
 
     /**

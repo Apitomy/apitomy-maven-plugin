@@ -87,6 +87,8 @@ import org.eclipse.aether.repository.RemoteRepository;
         threadSafe = true)
 public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
 
+    static final String GOAL_NAME = "verify-project-dependencies";
+
     static final String RESULTS_DIR = "verify-project-dependencies";
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -218,13 +220,18 @@ public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
     /**
      * Writes the module verification results to a JSON file under the module's own
      * target directory.
+     *
+     * <p>The file is stamped with an identifier for this Maven invocation. Results files
+     * outlive the build that wrote them, so the stamp is what lets the report goal tell this
+     * build's findings apart from a previous build's leftovers.
      */
     void writeResultsFile(List<UnalignedDependency> unalignedDeps) throws IOException {
         ModuleReport moduleReport = new ModuleReport(
                 project.getGroupId(), project.getArtifactId(), project.getVersion());
         moduleReport.setUnalignedDependencies(unalignedDeps);
 
-        VerifyResultsFile resultsFile = new VerifyResultsFile(moduleReport);
+        VerifyResultsFile resultsFile = new VerifyResultsFile(moduleReport,
+                VerifyProjectDependenciesReportMojo.buildIdOf(session));
 
         Path dir = getResultsDir();
         Files.createDirectories(dir);
