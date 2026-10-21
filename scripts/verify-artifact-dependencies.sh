@@ -10,6 +10,16 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Read the plugin version from the project's own pom.xml, so this script cannot drift out of
+# step with the repository it lives in. The first <version> element is the project's own.
+read_project_version() {
+    local pom="${SCRIPT_DIR}/../pom.xml"
+    [[ -f "$pom" ]] || return 0
+    sed -n 's|^[[:space:]]*<version>\(.*\)</version>[[:space:]]*$|\1|p' "$pom" | head -1
+}
+
 # ---- Defaults ----
 ARTIFACT=""
 REPOSITORIES=""
@@ -20,7 +30,8 @@ VERBOSE="true"
 CSV=""
 WORK_DIR=""
 CLEANUP="true"
-PLUGIN_VERSION="0.0.8"
+PLUGIN_VERSION="$(read_project_version)"
+PLUGIN_VERSION="${PLUGIN_VERSION:-1.5.0-SNAPSHOT}"
 
 # ---- Parse command-line arguments ----
 while [[ $# -gt 0 ]]; do

@@ -65,6 +65,10 @@ Scans directories and/or zip distributions for dependency files (e.g. JARs) and 
 that their file names contain a productization suffix (`-ibm-` or `.ibm-` by default). This is
 a simple file-name-based check — it does not resolve Maven dependency trees.
 
+Either source works on its own: configure `directories`, `distributions`, or both. The goal
+fails if the configured sources together contain no matching files, reporting how many of each
+it scanned and which `fileTypes` it was looking for.
+
 #### Configuration
 
 ```xml
@@ -119,6 +123,10 @@ Validates an offline Maven repository (directory or `.zip` file) by resolving th
 transitive dependency tree for each matching artifact using Maven's Aether resolver. Checks
 that all compile and runtime scoped dependencies are productized. This is useful for
 validating PNC-produced offline Maven repositories before delivery.
+
+A `.zip` may wrap the repository in one or more extra directories; the repository root is
+located from the layout of the artifacts themselves, so a repository holding a single
+top-level group directory is handled correctly.
 
 #### Command Line Usage
 
@@ -267,11 +275,24 @@ nothing, the goal detects this and fails, naming the modules that had not been b
 
 It also fails when it finds no results at all, since that means nothing was verified.
 
+#### Run Both Goals in One Maven Invocation
+
+Each `results.json` is stamped with the Maven invocation that wrote it, and the report counts
+only files from its own build. Results files outlive the build that wrote them, so a module
+that did not run the collect goal this time — deselected with `-pl`, skipped by a profile, or
+not rebuilt without `clean` — would otherwise contribute a stale verdict in either direction.
+Leftovers are skipped with a warning naming the modules, and the report logs which modules it
+did verify.
+
+Running `mvn package` and then a separate `mvn ...:verify-project-dependencies-report`
+therefore fails: the second invocation has nothing it can attribute to itself.
+
 #### Output
 
-A consolidated, de-duplicated summary of every unaligned dependency across the reactor, plus
-an `unaligned-dependencies.csv` in the root project's `target` directory. See
-[USAGE.md](USAGE.md) for sample output and the full workflow.
+A consolidated summary of every unaligned dependency across the reactor, plus an
+`unaligned-dependencies.csv` in the root project's `target` directory. Counts are of distinct
+dependencies — a dependency reached by several paths is one problem, shown with the shortest
+path to it. See [USAGE.md](USAGE.md) for sample output and the full workflow.
 
 ---
 
