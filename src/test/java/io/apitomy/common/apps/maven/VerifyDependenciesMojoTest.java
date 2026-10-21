@@ -1,15 +1,26 @@
 package io.apitomy.common.apps.maven;
 
+import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -24,6 +35,9 @@ class VerifyDependenciesMojoTest {
     private VerifyDependenciesMojo mojo;
     private Log mockLog;
     private Method isValidMethod;
+
+    @TempDir
+    Path tempDir;
 
     /**
      * Sets up the test environment before each test.
@@ -243,6 +257,87 @@ class VerifyDependenciesMojoTest {
 
         assertTrue(result, "Should be valid");
         verify(mockLog, never()).info(anyString());
+    }
+
+    // ========================================================================
+    // Source discovery tests (directories and/or distributions)
+    // ========================================================================
+
+    @Test
+    @DisplayName("A distribution-only configuration validates the files inside the zip")
+    void testExecute_distributionsOnly_findsProductizedEntries() throws Exception {
+        File distribution = createZip("dist.zip", "lib/acme-core-1.0.0-ibm-00002.jar");
+        mojo.distributions = List.of(distribution);
+
+        assertDoesNotThrow(() -> mojo.execute(),
+                "A zip containing only productized files should pass");
+    }
+
+    @Test
+    @DisplayName("A distribution-only configuration reports unproductized files inside the zip")
+    void testExecute_distributionsOnly_reportsUnproductizedEntries() throws Exception {
+        File distribution = createZip("dist.zip", "lib/legacy-lib-1.2.3.jar");
+        mojo.distributions = List.of(distribution);
+
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> mojo.execute());
+        assertTrue(e.getMessage().contains("legacy-lib-1.2.3.jar"),
+                "The failure should name the unproductized file, not claim nothing was found: "
+                        + e.getMessage());
+    }
+
+    @Test
+    @DisplayName("An empty directory alongside a distribution does not hide the distribution")
+    void testExecute_emptyDirectoryAndDistribution_usesTheDistribution() throws Exception {
+        File emptyDirectory = Files.createDirectories(tempDir.resolve("empty-lib")).toFile();
+        File distribution = createZip("dist.zip", "lib/legacy-lib-1.2.3.jar");
+        mojo.directories = List.of(emptyDirectory);
+        mojo.distributions = List.of(distribution);
+
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> mojo.execute());
+        assertTrue(e.getMessage().contains("legacy-lib-1.2.3.jar"), e.getMessage());
+    }
+
+    @Test
+    @DisplayName("Finding nothing in any configured source is still an error")
+    void testExecute_noFilesInAnySource_fails() throws Exception {
+        File emptyDirectory = Files.createDirectories(tempDir.resolve("empty-lib")).toFile();
+        File emptyDistribution = createZip("empty.zip");
+        mojo.directories = List.of(emptyDirectory);
+        mojo.distributions = List.of(emptyDistribution);
+
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> mojo.execute());
+        assertTrue(e.getMessage().contains("0 dependencies"), e.getMessage());
+    }
+
+    @Test
+    @DisplayName("Configuring no sources at all is an error")
+    void testExecute_noSourcesConfigured_fails() {
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> mojo.execute());
+        assertTrue(e.getMessage().contains("0 dependencies"), e.getMessage());
+    }
+
+    /**
+     * Creates a zip file in the temp directory containing an entry per supplied name.
+     *
+     * @param name the file name of the zip to create
+     * @param entryNames the entries to add to the zip
+     * @return the created zip file
+     * @throws IOException if the zip cannot be written
+     */
+    private File createZip(String name, String... entryNames) throws IOException {
+        Path zipPath = tempDir.resolve(name);
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(zipPath))) {
+            for (String entryName : entryNames) {
+                zip.putNextEntry(new ZipEntry(entryName));
+                zip.write("stand-in for an artifact".getBytes(StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
+        }
+        return zipPath.toFile();
     }
 
     @Test

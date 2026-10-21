@@ -82,10 +82,6 @@ public class VerifyDependenciesMojo extends AbstractProductizationMojo {
                 filesToValidate.addAll(foundInDir);
             }
 
-            if (filesToValidate.isEmpty()) {
-                throw new MojoFailureException("Found 0 dependencies (from configured sources) to verify!");
-            }
-
             logVerbose("Total files found in directories: " + filesToValidate.size());
 
             // Find files in configured distributions.
@@ -98,6 +94,15 @@ public class VerifyDependenciesMojo extends AbstractProductizationMojo {
                     foundInDist.forEach(file -> logVerbose("  - " + file));
                 }
                 filesToValidate.addAll(foundInDist);
+            }
+
+            // Only now that every configured source has been scanned can the set be judged empty.
+            if (filesToValidate.isEmpty()) {
+                throw new MojoFailureException("Found 0 dependencies to verify across "
+                        + directories.size() + " directories and " + distributions.size()
+                        + " distributions. Check that the configured sources exist and that"
+                        + " they contain files matching the configured fileTypes " + fileTypes
+                        + ".");
             }
 
             // Validate those files.
