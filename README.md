@@ -385,9 +385,9 @@ mvn ... -DproductizationModes=ibm,redhat
 
 An unrecognised mode fails the build with a message listing the valid values.
 
-> **Breaking change:** before 2.0.0 the check was hardcoded to the Red Hat suffixes. From
-> 2.0.0 the default is `ibm`, so existing Red Hat builds must configure
-> `productizationModes` explicitly.
+> **Behaviour change in 1.5.0:** before 1.5.0 the check was hardcoded to the Red Hat suffixes.
+> From 1.5.0 the default is `ibm`, so existing Red Hat builds must configure
+> `productizationModes` explicitly or they will report every dependency as unaligned.
 
 #### CSV Output
 
