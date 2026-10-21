@@ -282,3 +282,7 @@ directory with columns: `groupId`, `artifactId`, `version`.
 
 Both the per-module JSON results and the aggregate CSV can be consumed by other tools or
 CI/CD pipelines for further processing.
+
+The CSV is written on every run, including runs that find nothing — then it holds the header row
+alone. A pipeline reading the file can therefore trust it to describe the run that just happened,
+rather than a violation list left behind by an earlier one.

@@ -1,9 +1,12 @@
 package io.apitomy.common.apps.maven;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +21,7 @@ import org.eclipse.aether.graph.Dependency;
 import org.eclipse.aether.graph.DependencyNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
 /**
@@ -26,6 +30,9 @@ import org.mockito.Mockito;
 class AbstractVerifyMojoTest {
 
     private AbstractVerifyMojo mojo;
+
+    @TempDir
+    Path tempDir;
 
     @BeforeEach
     void setUp() {
@@ -147,8 +154,60 @@ class AbstractVerifyMojoTest {
     }
 
     // ========================================================================
+    // CSV output
+    // ========================================================================
+
+    @Test
+    void testWriteCsvReport_writesHeaderOnlyWhenNothingIsUnaligned() throws Exception {
+        mojo.outputCsv = tempDir.resolve("unproductized.csv").toFile();
+
+        mojo.writeCsvReport(List.of());
+
+        assertEquals(List.of("groupId,artifactId,version"), csvLines(),
+                "A clean run must still say so, rather than leaving no file at all");
+    }
+
+    @Test
+    void testWriteCsvReport_replacesAReportFromAnEarlierRun() throws Exception {
+        mojo.outputCsv = tempDir.resolve("unproductized.csv").toFile();
+        Files.writeString(mojo.outputCsv.toPath(),
+                "groupId,artifactId,version\ncom.example,already-fixed,1.0\n");
+
+        mojo.writeCsvReport(List.of());
+
+        assertEquals(List.of("groupId,artifactId,version"), csvLines(),
+                "Violations fixed since the last run must not survive in the report");
+    }
+
+    @Test
+    void testWriteCsvReport_writesOneRowPerUnalignedDependency() throws Exception {
+        mojo.outputCsv = tempDir.resolve("unproductized.csv").toFile();
+        DependencyNode root = node("io.apitomy:root:1.0-ibm-00002",
+                node("com.example:one:1.0"),
+                node("com.example:two:2.0"));
+
+        mojo.writeCsvReport(collect(root));
+
+        assertEquals(List.of("groupId,artifactId,version",
+                "com.example,one,1.0",
+                "com.example,two,2.0"), csvLines());
+    }
+
+    @Test
+    void testWriteCsvReport_doesNothingWhenNoOutputFileIsConfigured() {
+        mojo.outputCsv = null;
+
+        assertDoesNotThrow(() -> mojo.writeCsvReport(List.of()));
+    }
+
+    // ========================================================================
     // Helpers
     // ========================================================================
+
+    private List<String> csvLines() throws Exception {
+        assertTrue(mojo.outputCsv.isFile(), "Expected a CSV at " + mojo.outputCsv);
+        return Files.readAllLines(mojo.outputCsv.toPath());
+    }
 
     private List<UnalignedDependency> collect(DependencyNode root) {
         Map<String, UnalignedDependency> unaligned = new LinkedHashMap<>();
