@@ -9,11 +9,13 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -54,6 +56,15 @@ import org.eclipse.aether.repository.RemoteRepository;
  */
 @Mojo(name = "verify-maven-repository")
 public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
+
+    /** Directory name that explicitly marks the repository root inside an archive. */
+    private static final String MARKER_DIRECTORY_NAME = "maven-repository";
+
+    /** How many wrapping directories an archive may nest the repository in. */
+    private static final int MAX_WRAPPER_DEPTH = 5;
+
+    /** How many POMs to examine before giving up on deriving the root from the layout. */
+    private static final int MAX_POMS_SAMPLED_FOR_ROOT_DETECTION = 50;
 
     /**
      * Path to an offline Maven repository directory to validate.
@@ -333,7 +344,7 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
      * @param destDir the destination directory
      * @throws IOException if an I/O error occurs or a zip-slip attack is detected
      */
-    private void extractZip(File zipFile, Path destDir) throws IOException {
+    void extractZip(File zipFile, Path destDir) throws IOException {
         try (ZipFile zip = new ZipFile(zipFile)) {
             Enumeration<? extends ZipEntry> entries = zip.entries();
             while (entries.hasMoreElements()) {
@@ -359,51 +370,155 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
     }
 
     /**
-     * Detects the actual repository root after zip extraction. Handles multiple levels of
-     * wrapping directories and looks for a {@code maven-repository} directory by name. If no
-     * specifically named directory is found, falls back to drilling down through single-child
-     * directories.
+     * Detects the actual repository root after zip extraction, where the archive may wrap the
+     * repository in one or more extra directories.
+     *
+     * <p>The root is derived from the layout of an actual artifact: a POM's own coordinates say
+     * exactly how deep below the root it must sit, so stripping {@code groupId/artifactId/version}
+     * from its location yields the root. That beats guessing from directory shape, because a
+     * repository holding a single top-level group (say, only {@code io/apitomy/...}) looks
+     * exactly like a wrapped one.
+     *
+     * <p>When no POM anchors the search — an empty or non-repository archive — the previous
+     * heuristics apply: a directory named {@code maven-repository}, else drilling down through
+     * single-child directories.
      *
      * @param extractDir the directory where the zip was extracted
      * @return the detected repository root path
      * @throws IOException if an I/O error occurs
      */
     Path detectRepoRoot(Path extractDir) throws IOException {
-        Path current = extractDir;
-        int maxDepth = 5;
-
-        while (maxDepth-- > 0) {
-            try (var children = Files.list(current)) {
-                List<Path> items = children.collect(Collectors.toList());
-
-                // Look for a directory named "maven-repository" at this level.
-                for (Path item : items) {
-                    if (Files.isDirectory(item)
-                            && item.getFileName().toString().equals("maven-repository")) {
-                        logVerbose("Found maven-repository directory: " + item);
-                        return item;
-                    }
-                }
-
-                // If there's a single subdirectory (possibly with non-directory files like
-                // README.md alongside it), drill into it.
-                List<Path> subdirs = items.stream()
-                        .filter(Files::isDirectory)
-                        .collect(Collectors.toList());
-                if (subdirs.size() == 1) {
-                    logVerbose("Drilling into single subdirectory: "
-                            + subdirs.get(0).getFileName());
-                    current = subdirs.get(0);
-                    continue;
-                }
-
-                // Multiple subdirectories or no subdirectories — this is the repo root.
-                break;
-            }
+        Path derived = deriveRepoRootFromPomLayout(extractDir);
+        if (derived != null) {
+            logVerbose("Derived repository root from artifact layout: " + derived);
+            return derived;
         }
 
+        Path marker = findMarkerDirectory(extractDir);
+        if (marker != null) {
+            logVerbose("Found maven-repository directory: " + marker);
+            return marker;
+        }
+
+        Path current = drillThroughSingleSubdirectories(extractDir);
         logVerbose("Using repository root: " + current);
         return current;
+    }
+
+    /**
+     * Derives the repository root from the location of a POM, by stripping the
+     * {@code groupId/artifactId/version} path that Maven's layout requires below the root.
+     * POMs whose coordinates do not match their own location (an inherited groupId, say) are
+     * skipped, and only the first handful are examined so that a large repository is not walked
+     * in full.
+     *
+     * @param extractDir the directory where the zip was extracted
+     * @return the derived repository root, or {@code null} if no POM anchors it
+     * @throws IOException if an I/O error occurs
+     */
+    private Path deriveRepoRootFromPomLayout(Path extractDir) throws IOException {
+        try (Stream<Path> files = Files.walk(extractDir)) {
+            return files.filter(Files::isRegularFile)
+                    .filter(file -> file.toString().endsWith(".pom"))
+                    .limit(MAX_POMS_SAMPLED_FOR_ROOT_DETECTION)
+                    .map(this::repoRootForPom)
+                    .filter(root -> root != null && root.startsWith(extractDir))
+                    .findFirst()
+                    .orElse(null);
+        }
+    }
+
+    /**
+     * Walks up from a POM file through the path segments its own coordinates imply.
+     *
+     * @param pomFile the POM file to anchor on
+     * @return the repository root the POM implies, or {@code null} if its location does not
+     *         match its coordinates
+     */
+    private Path repoRootForPom(Path pomFile) {
+        ArtifactCoordinates coords = readCoordinates(pomFile);
+        if (coords == null) {
+            return null;
+        }
+
+        List<String> expectedSegments = new ArrayList<>(
+                Arrays.asList(coords.groupId().split("\\.")));
+        expectedSegments.add(coords.artifactId());
+        expectedSegments.add(coords.version());
+
+        Path cursor = pomFile.getParent();
+        for (int i = expectedSegments.size() - 1; i >= 0; i--) {
+            if (cursor == null || cursor.getFileName() == null
+                    || !cursor.getFileName().toString().equals(expectedSegments.get(i))) {
+                logVerbose("POM location does not match its coordinates, skipping: " + pomFile);
+                return null;
+            }
+            cursor = cursor.getParent();
+        }
+        return cursor;
+    }
+
+    /**
+     * Looks for a directory named {@code maven-repository}, descending through single-child
+     * directories as the only candidates for a wrapper.
+     *
+     * @param extractDir the directory where the zip was extracted
+     * @return the marker directory, or {@code null} if there is none
+     * @throws IOException if an I/O error occurs
+     */
+    private Path findMarkerDirectory(Path extractDir) throws IOException {
+        Path current = extractDir;
+
+        for (int depth = 0; depth < MAX_WRAPPER_DEPTH; depth++) {
+            List<Path> subdirs = subdirectoriesOf(current);
+            for (Path subdir : subdirs) {
+                if (subdir.getFileName().toString().equals(MARKER_DIRECTORY_NAME)) {
+                    return subdir;
+                }
+            }
+            if (subdirs.size() != 1) {
+                return null;
+            }
+            current = subdirs.get(0);
+        }
+        return null;
+    }
+
+    /**
+     * Drills down through single-child directories, the shape an archive takes when it wraps the
+     * repository in one or more extra directories.
+     *
+     * @param extractDir the directory where the zip was extracted
+     * @return the innermost directory reached
+     * @throws IOException if an I/O error occurs
+     */
+    private Path drillThroughSingleSubdirectories(Path extractDir) throws IOException {
+        Path current = extractDir;
+
+        for (int depth = 0; depth < MAX_WRAPPER_DEPTH; depth++) {
+            // A single subdirectory (possibly with non-directory files like README.md
+            // alongside it) is a wrapper; anything else is the root.
+            List<Path> subdirs = subdirectoriesOf(current);
+            if (subdirs.size() != 1) {
+                return current;
+            }
+            logVerbose("Drilling into single subdirectory: " + subdirs.get(0).getFileName());
+            current = subdirs.get(0);
+        }
+        return current;
+    }
+
+    /**
+     * Lists the subdirectories of a directory.
+     *
+     * @param dir the directory to list
+     * @return its subdirectories
+     * @throws IOException if an I/O error occurs
+     */
+    private List<Path> subdirectoriesOf(Path dir) throws IOException {
+        try (Stream<Path> children = Files.list(dir)) {
+            return children.filter(Files::isDirectory).collect(Collectors.toList());
+        }
     }
 
     /**
@@ -415,35 +530,16 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
      */
     List<ArtifactCoordinates> scanRepository(File repoDir) throws IOException {
         List<ArtifactCoordinates> artifacts = new ArrayList<>();
-        MavenXpp3Reader reader = new MavenXpp3Reader();
 
         Files.walkFileTree(repoDir.toPath(), new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                 if (file.toString().endsWith(".pom")) {
-                    try (InputStream is = Files.newInputStream(file)) {
-                        Model model = reader.read(is);
-                        String groupId = model.getGroupId() != null ? model.getGroupId()
-                                : (model.getParent() != null
-                                        ? model.getParent().getGroupId() : null);
-                        String version = model.getVersion() != null ? model.getVersion()
-                                : (model.getParent() != null
-                                        ? model.getParent().getVersion() : null);
-                        String artifactId = model.getArtifactId();
-                        String packaging = model.getPackaging() != null
-                                ? model.getPackaging() : "jar";
-
-                        if (groupId != null && artifactId != null && version != null) {
-                            artifacts.add(new ArtifactCoordinates(groupId, artifactId,
-                                    version, packaging));
-                            logVerbose("Found artifact: " + groupId + ":" + artifactId
-                                    + ":" + version + " (" + packaging + ")");
-                        } else {
-                            getLog().warn("Skipping POM with incomplete GAV: " + file);
-                        }
-                    } catch (Exception e) {
-                        getLog().warn("Failed to parse POM: " + file + " - "
-                                + e.getMessage());
+                    ArtifactCoordinates coords = readCoordinates(file);
+                    if (coords != null) {
+                        artifacts.add(coords);
+                        logVerbose("Found artifact: " + coords.gav()
+                                + " (" + coords.packaging() + ")");
                     }
                 }
                 return FileVisitResult.CONTINUE;
@@ -451,6 +547,35 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
         });
 
         return artifacts;
+    }
+
+    /**
+     * Reads the coordinates declared by a POM file, falling back to the parent declaration for
+     * an inherited groupId or version.
+     *
+     * @param pomFile the POM file to read
+     * @return the coordinates, or {@code null} if the POM cannot be parsed or is incomplete
+     */
+    private ArtifactCoordinates readCoordinates(Path pomFile) {
+        try (InputStream is = Files.newInputStream(pomFile)) {
+            Model model = new MavenXpp3Reader().read(is);
+            String groupId = model.getGroupId() != null ? model.getGroupId()
+                    : (model.getParent() != null ? model.getParent().getGroupId() : null);
+            String version = model.getVersion() != null ? model.getVersion()
+                    : (model.getParent() != null ? model.getParent().getVersion() : null);
+            String artifactId = model.getArtifactId();
+            String packaging = model.getPackaging() != null ? model.getPackaging() : "jar";
+
+            if (groupId == null || artifactId == null || version == null) {
+                getLog().warn("Skipping POM with incomplete GAV: " + pomFile);
+                return null;
+            }
+            return new ArtifactCoordinates(groupId, artifactId, version, packaging);
+
+        } catch (Exception e) {
+            getLog().warn("Failed to parse POM: " + pomFile + " - " + e.getMessage());
+            return null;
+        }
     }
 
     /**

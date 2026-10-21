@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import io.apitomy.common.apps.maven.VerifyMavenRepositoryMojo.ArtifactCoordinates;
 import org.apache.maven.plugin.MojoFailureException;
@@ -265,6 +268,64 @@ class VerifyMavenRepositoryMojoTest {
         assertEquals(innerDir, root);
     }
 
+    @Test
+    void testDetectRepoRoot_singleTopLevelGroupDirectory() throws Exception {
+        Path extractDir = tempDir.resolve("extract");
+        createArtifactPom(extractDir, "io.apitomy", "my-lib", "1.0.0-ibm-00002");
+
+        Path root = mojo.detectRepoRoot(extractDir);
+        assertEquals(extractDir, root,
+                "A repository whose artifacts all sit under one group directory must not be"
+                        + " mistaken for a wrapper around the real root");
+    }
+
+    @Test
+    void testDetectRepoRoot_singleTopLevelGroupDirectoryInsideWrapper() throws Exception {
+        Path extractDir = tempDir.resolve("extract");
+        Path repoDir = extractDir.resolve("apitomy-repository-1.0.0");
+        createArtifactPom(repoDir, "io.apitomy", "my-lib", "1.0.0-ibm-00002");
+
+        Path root = mojo.detectRepoRoot(extractDir);
+        assertEquals(repoDir, root,
+                "The wrapper directory should be skipped, but not the group directory below it");
+    }
+
+    @Test
+    void testDetectRepoRoot_deepSingleGroupPath() throws Exception {
+        Path extractDir = tempDir.resolve("extract");
+        createArtifactPom(extractDir, "com.example.nested.deeply", "my-lib", "2.0.0.ibm-00004");
+
+        Path root = mojo.detectRepoRoot(extractDir);
+        assertEquals(extractDir, root);
+    }
+
+    @Test
+    void testDetectRepoRoot_singleTopLevelGroupExtractedFromZip() throws Exception {
+        Path sourceRepo = tempDir.resolve("source");
+        createArtifactPom(sourceRepo, "io.apitomy", "my-lib", "1.0.0-ibm-00002");
+        Path zip = createZipOf(sourceRepo, tempDir.resolve("maven-repository.zip"));
+
+        Path extractDir = Files.createDirectories(tempDir.resolve("extract"));
+        mojo.extractZip(zip.toFile(), extractDir);
+
+        Path root = mojo.detectRepoRoot(extractDir);
+        assertEquals(extractDir, root);
+        assertTrue(Files.isDirectory(root.resolve("io/apitomy/my-lib/1.0.0-ibm-00002")),
+                "The detected root should be the directory the group path hangs off");
+    }
+
+    @Test
+    void testDetectRepoRoot_noPomsFallsBackToDrillingDown() throws Exception {
+        Path extractDir = tempDir.resolve("extract");
+        Path innerDir = extractDir.resolve("wrapper");
+        Files.createDirectories(innerDir.resolve("io"));
+        Files.createDirectories(innerDir.resolve("com"));
+
+        Path root = mojo.detectRepoRoot(extractDir);
+        assertEquals(innerDir, root,
+                "With no POMs to anchor on, the single-subdirectory fallback still applies");
+    }
+
     // ========================================================================
     // Configuration validation tests
     // ========================================================================
@@ -320,6 +381,21 @@ class VerifyMavenRepositoryMojoTest {
         Files.createDirectories(artifactDir);
         Files.writeString(artifactDir.resolve(artifactId + "-" + version + ".pom"),
                 createPomXml(groupId, artifactId, version, List.of()));
+    }
+
+    /**
+     * Zips up the contents of a directory, storing entries relative to that directory.
+     */
+    private Path createZipOf(Path sourceDir, Path zipPath) throws IOException {
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(zipPath));
+                Stream<Path> files = Files.walk(sourceDir)) {
+            for (Path file : (Iterable<Path>) files.filter(Files::isRegularFile)::iterator) {
+                zip.putNextEntry(new ZipEntry(sourceDir.relativize(file).toString()));
+                Files.copy(file, zip);
+                zip.closeEntry();
+            }
+        }
+        return zipPath;
     }
 
     /**
