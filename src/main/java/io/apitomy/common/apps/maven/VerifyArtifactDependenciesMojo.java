@@ -25,15 +25,15 @@ import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 
 /**
- * Verifies that all transitive dependencies of a single Maven artifact are productized
- * (have a {@code -redhat-} or {@code .redhat-} version suffix). The build fails if any
- * unproductized dependencies are found.
+ * Verifies that all transitive dependencies of a single Maven artifact are productized for
+ * the configured {@code productizationModes} (by default {@code ibm}, i.e. a {@code -ibm-} or
+ * {@code .ibm-} version suffix). The build fails if any unproductized dependencies are found.
  *
  * <p>This mojo does not require a Maven project and can be run directly from the command
  * line. Example usage:
  * <pre>{@code
- * mvn io.apitomy:apitomy-maven-plugin:0.0.5-SNAPSHOT:verify-artifact-dependencies \
- *     -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-redhat-00001 \
+ * mvn io.apitomy:apitomy-maven-plugin:verify-artifact-dependencies \
+ *     -Dartifact=io.apitomy:apitomy-registry-app:3.0.0-ibm-00002 \
  *     -DremoteRepositories=https://repo1.maven.org/maven2
  * }</pre>
  *
@@ -89,6 +89,8 @@ public class VerifyArtifactDependenciesMojo extends AbstractVerifyMojo {
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
+            validateProductizationModes();
+
             if (ignoreGAVs == null) {
                 ignoreGAVs = List.of();
             }

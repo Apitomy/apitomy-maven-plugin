@@ -40,7 +40,8 @@ import org.eclipse.aether.repository.RemoteRepository;
  * {@code verify-project-dependencies-report} goal.
  *
  * <p>This mojo checks that all compile and runtime scoped transitive dependencies are
- * productized (have a {@code -redhat-} or {@code .redhat-} version suffix). It never
+ * productized for the configured {@code productizationModes} (by default {@code ibm}, i.e. a
+ * {@code -ibm-} or {@code .ibm-} version suffix). It never
  * fails the build directly; instead it writes its results to disk so the aggregator
  * report mojo can produce a consolidated report across all reactor modules.
  *
@@ -59,6 +60,11 @@ import org.eclipse.aether.repository.RemoteRepository;
  *                         <goals>
  *                             <goal>verify-project-dependencies</goal>
  *                         </goals>
+ *                         <configuration>
+ *                             <productizationModes>
+ *                                 <productizationMode>ibm</productizationMode>
+ *                             </productizationModes>
+ *                         </configuration>
  *                     </execution>
  *                 </executions>
  *             </plugin>
@@ -105,6 +111,8 @@ public class VerifyProjectDependenciesCollectMojo extends AbstractVerifyMojo {
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
+            validateProductizationModes();
+
             if (ignoreGAVs == null) {
                 ignoreGAVs = List.of();
             }

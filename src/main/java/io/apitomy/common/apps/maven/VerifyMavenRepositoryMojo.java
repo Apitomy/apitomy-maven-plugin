@@ -38,8 +38,9 @@ import org.eclipse.aether.repository.RemoteRepository;
 
 /**
  * Validates an offline Maven repository by resolving the full transitive dependency tree of each
- * matching artifact and checking that all compile/runtime dependencies are productized (have a
- * {@code -redhat-} or {@code .redhat-} version suffix).
+ * matching artifact and checking that all compile/runtime dependencies are productized for the
+ * configured {@code productizationModes} (by default {@code ibm}, i.e. a {@code -ibm-} or
+ * {@code .ibm-} version suffix).
  *
  * <p>For each artifact matching the configured include patterns, this mojo uses Maven's dependency
  * resolver (Aether) to build the complete transitive dependency tree — exactly as Maven would
@@ -164,6 +165,7 @@ public class VerifyMavenRepositoryMojo extends AbstractVerifyMojo {
         Path tempLocalRepo = null;
 
         try {
+            validateProductizationModes();
             validateConfiguration();
 
             if (artifactExcludes == null) {

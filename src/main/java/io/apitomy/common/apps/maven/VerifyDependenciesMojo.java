@@ -1,6 +1,5 @@
 package io.apitomy.common.apps.maven;
 
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -20,7 +19,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 @Mojo(name = "verify-dependencies")
-public class VerifyDependenciesMojo extends AbstractMojo {
+public class VerifyDependenciesMojo extends AbstractProductizationMojo {
 
     @Parameter
     List<String> fileTypes;
@@ -35,20 +34,12 @@ public class VerifyDependenciesMojo extends AbstractMojo {
     List<String> ignoreFiles;
 
     /**
-     * Enable verbose output for debugging. When enabled, provides detailed information about:
-     * - Files being scanned in each directory and distribution
-     * - File type detection and filtering
-     * - Validation results for each artifact
-     * - Pattern matching for ignored files
-     */
-    @Parameter(property = "verify.verbose", defaultValue = "false")
-    boolean verbose;
-
-    /**
      * @see org.apache.maven.plugin.Mojo#execute()
      */
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+        validateProductizationModes();
+
         try {
             if (fileTypes == null) {
                 fileTypes = List.of("jar");
@@ -120,7 +111,7 @@ public class VerifyDependenciesMojo extends AbstractMojo {
                     logVerbose("Ignoring file: " + file);
                     ignoredArtifacts.add(file);
                 } else if (!isValid(file)) {
-                    logVerbose("Invalid file (missing -redhat- or .redhat-): " + file);
+                    logVerbose("Invalid file (missing " + describeSuffixes() + "): " + file);
                     invalidArtifacts.add(file);
                 } else {
                     logVerbose("Valid file: " + file);
@@ -211,7 +202,8 @@ public class VerifyDependenciesMojo extends AbstractMojo {
     }
 
     /**
-     * Checks if an artifact is valid (productized with -redhat- or .redhat-).
+     * Checks if an artifact is valid, i.e. its file name carries a productization suffix for
+     * one of the configured {@code productizationModes}.
      *
      * @param artifactPath the artifact path to check
      * @return true if the artifact is valid, false otherwise
@@ -230,12 +222,11 @@ public class VerifyDependenciesMojo extends AbstractMojo {
             fileName = artifactPath;
         }
         
-        boolean hasRedhatDash = fileName.contains("-redhat-");
-        boolean hasRedhatDot = fileName.contains(".redhat-");
-        boolean valid = hasRedhatDash || hasRedhatDot;
+        boolean valid = isProductized(fileName);
 
-        if (verbose && !valid) {
-            logVerbose("Artifact is not valid (missing -redhat- or .redhat-): " + artifactPath);
+        if (!valid) {
+            logVerbose("Artifact is not valid (missing " + describeSuffixes() + "): "
+                    + artifactPath);
         }
 
         return valid;
@@ -265,17 +256,6 @@ public class VerifyDependenciesMojo extends AbstractMojo {
             sb.append("\n");
         }
         return sb.toString();
-    }
-
-    /**
-     * Logs a message when verbose mode is enabled.
-     *
-     * @param message the message to log
-     */
-    private void logVerbose(String message) {
-        if (verbose) {
-            getLog().info("[VERBOSE] " + message);
-        }
     }
 
 }
