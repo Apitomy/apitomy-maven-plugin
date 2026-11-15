@@ -12,7 +12,9 @@
     ],
     "dependencyDashboard": true,
     "rangeStrategy": "bump",
-    "ignorePaths": [],
+    "ignorePaths": [
+        "src/it/**"
+    ],
     "prConcurrentLimit": 10,
     "prHourlyLimit": 5,
     "packageRules": [
